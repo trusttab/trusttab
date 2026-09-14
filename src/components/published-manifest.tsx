@@ -1,4 +1,5 @@
 import type { manifests } from "@/db/schema";
+import { MANIFEST_LINK_REL } from "@/lib/verification/manifest-link";
 
 type ManifestRow = typeof manifests.$inferSelect;
 
@@ -42,18 +43,31 @@ export function PublishedManifest({
             {publicUrl}
           </a>
         </p>
-        <p>
-          Required for verification: make it available at <code className="font-mono">https://{domain}/.well-known/agent-trust.json</code>{" "}
-          by adding a redirect (or proxy) from that path to the public URL. For example, on Vercel
-          (<code className="font-mono">vercel.json</code>):
-        </p>
-        <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
-          {JSON.stringify(
-            { redirects: [{ source: "/.well-known/agent-trust.json", destination: publicUrl, permanent: false }] },
-            null,
-            2,
-          )}
-        </pre>
+        <p className="font-medium">Required for verification: point your site at this manifest, using one of:</p>
+        <div className="space-y-1">
+          <p>
+            <span className="font-medium">Option A: well-known path (preferred).</span> Redirect (or proxy){" "}
+            <code className="font-mono">https://{domain}/.well-known/agent-trust.json</code> to the public URL. For
+            example, on Vercel (<code className="font-mono">vercel.json</code>):
+          </p>
+          <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
+            {JSON.stringify(
+              { redirects: [{ source: "/.well-known/agent-trust.json", destination: publicUrl, permanent: false }] },
+              null,
+              2,
+            )}
+          </pre>
+        </div>
+        <div className="space-y-1">
+          <p>
+            <span className="font-medium">Option B: link tag.</span> If your platform reserves{" "}
+            <code className="font-mono">/.well-known/</code> (common on Webflow, Squarespace, Wix, Base44 and similar
+            builders), add this inside the <code className="font-mono">&lt;head&gt;</code> of your homepage instead:
+          </p>
+          <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
+            {`<link rel="${MANIFEST_LINK_REL}" href="${publicUrl}">`}
+          </pre>
+        </div>
       </div>
 
       <details className="text-sm">

@@ -3,11 +3,12 @@ import "server-only";
 import { getIssuer } from "@/lib/manifest/build";
 import { getPublicJwks } from "@/lib/manifest/signing";
 import type { Manifest } from "@/lib/manifest/types";
-import type { SafeFetchResult } from "@/lib/safe-fetch";
-import { fetchSitePage } from "@/lib/site-fetch";
+import { safeFetchText, type SafeFetchResult } from "@/lib/safe-fetch";
+import { fetchSitePage, isSameSite } from "@/lib/site-fetch";
 
 import { matchForm } from "./form-match";
 import { scanForInjection } from "./injection-scan";
+import { findManifestLink, MANIFEST_LINK_REL } from "./manifest-link";
 import { evaluateServedManifest } from "./served-manifest";
 import type { CheckDetail, CheckResult, VerificationResults } from "./types";
 
@@ -26,8 +27,8 @@ export type VerificationOutcome = {
  *
  * Pages are fetched once each (homepage + every declared endpoint path) and
  * shared between checks. All fetches go through the SSRF-hardened fetcher and
- * only follow redirects within the site — except the well-known manifest,
- * which may also redirect to this issuer's public manifest URL for the site.
+ * only follow redirects within the site — except manifest discovery, which
+ * may also reach this issuer's public manifest URL for the site.
  */
 export async function runVerification(args: {
   domain: string;
@@ -43,15 +44,12 @@ export async function runVerification(args: {
     pages.set(path, { url: result.ok ? result.finalUrl : requestedUrl, result });
   });
 
-  const issuerManifestUrl = new URL(`${getIssuer().url}/api/manifest/${domain}`);
-  const wellKnown = await fetchSitePage(domain, WELL_KNOWN_PATH, {
-    alsoAllowRedirect: (url) => url.origin === issuerManifestUrl.origin && url.pathname === issuerManifestUrl.pathname,
-  });
+  const discovery = await discoverServedManifest(domain, verificationId, pages.get("/")!);
 
   const endpointCheck = checkEndpoints(manifest, pages);
   const { check: injectionCheck, detected } = checkInjection(pages);
-  const sslCheck = checkSsl([...pages.values()].map((p) => p.result).concat(wellKnown.result));
-  const [domainCheck, expiryCheck] = checkServedManifest(wellKnown.result, domain, verificationId);
+  const sslCheck = checkSsl([...pages.values()].map((p) => p.result).concat(discovery.fetches));
+  const [domainCheck, expiryCheck] = discovery.checks;
 
   const checks = [endpointCheck, injectionCheck, sslCheck, domainCheck, expiryCheck];
   return {
@@ -127,28 +125,92 @@ function checkSsl(results: SafeFetchResult[]): CheckResult {
   };
 }
 
-function checkServedManifest(result: SafeFetchResult, domain: string, verificationId: string): [CheckResult, CheckResult] {
-  const domainBase = { id: "domain_match", label: "Manifest is served from its own domain" } as const;
-  const expiryBase = { id: "expiry", label: "Served manifest has not expired" } as const;
-  const url = `https://${domain}${WELL_KNOWN_PATH}`;
+/**
+ * Checks 4–5: find the manifest the site serves, then evaluate it.
+ *
+ * Discovery order:
+ * 1. https://<domain>/.well-known/agent-trust.json. If this returns a
+ *    manifest-shaped JSON document, it is authoritative — pass or fail, no fallback — because
+ *    that's the document agents reading the well-known path will get.
+ * 2. Otherwise (404, error, or anything that isn't a manifest, such as a site
+ *    builder's reserved-path error or an SPA's HTML shell), a `<link rel="agent-trust-manifest">` in the
+ *    homepage <head>, for platforms that reserve /.well-known/.
+ *
+ * Both routes may only reach URLs on the site itself or exactly this
+ * issuer's manifest URL for the domain.
+ */
+async function discoverServedManifest(
+  domain: string,
+  verificationId: string,
+  homepage: { url: string; result: SafeFetchResult },
+): Promise<{ checks: [CheckResult, CheckResult]; fetches: SafeFetchResult[] }> {
+  const issuerManifestUrl = new URL(`${getIssuer().url}/api/manifest/${domain}`);
+  const isIssuerManifestUrl = (url: URL) =>
+    url.origin === issuerManifestUrl.origin && url.pathname === issuerManifestUrl.pathname;
+  const allowed = (url: URL) => isSameSite(url, domain) || isIssuerManifestUrl(url);
 
-  let failure: string | null = null;
-  if (!result.ok) failure = `Could not load ${url}: ${result.error}`;
-  else if (result.status === 404) failure = `${url} returned 404. Add a redirect from that path to your TrustTab manifest URL.`;
-  else if (result.status >= 400) failure = `${url} returned HTTP ${result.status}.`;
-
-  if (failure !== null || !result.ok) {
+  const fail = (message: string): [CheckResult, CheckResult] => [
+    { ...DOMAIN_CHECK, passed: false, message, details: [] },
+    { ...EXPIRY_CHECK, passed: false, message: "Not evaluated: no manifest was found.", details: [] },
+  ];
+  const evaluate = (body: string, via: string): [CheckResult, CheckResult] => {
+    const verdict = evaluateServedManifest({ body, domain, verificationId, jwks: getPublicJwks() });
     return [
-      { ...domainBase, passed: false, message: failure!, details: [] },
-      { ...expiryBase, passed: false, message: "Not evaluated: no manifest was served.", details: [] },
+      { ...DOMAIN_CHECK, ...verdict.domainMatch, message: `${verdict.domainMatch.message} (found via ${via})`, details: [] },
+      { ...EXPIRY_CHECK, ...verdict.expiry, details: [] },
     ];
+  };
+
+  // 1. Well-known path.
+  const wellKnownUrl = `https://${domain}${WELL_KNOWN_PATH}`;
+  const wellKnown = await fetchSitePage(domain, WELL_KNOWN_PATH, { alsoAllowRedirect: isIssuerManifestUrl });
+  const fetches = [wellKnown.result];
+  if (wellKnown.result.ok && wellKnown.result.status < 300 && looksLikeManifest(wellKnown.result.body)) {
+    return { checks: evaluate(wellKnown.result.body, WELL_KNOWN_PATH), fetches };
+  }
+  const wellKnownProblem = !wellKnown.result.ok
+    ? wellKnown.result.error
+    : wellKnown.result.status >= 300
+      ? `HTTP ${wellKnown.result.status}`
+      : "did not return a manifest";
+
+  // 2. <link rel="agent-trust-manifest"> on the homepage.
+  const href = homepage.result.ok ? findManifestLink(homepage.result.body, homepage.result.finalUrl) : null;
+  if (!href) {
+    return {
+      checks: fail(
+        `No manifest found. ${wellKnownUrl}: ${wellKnownProblem}. The homepage also has no <link rel="${MANIFEST_LINK_REL}"> tag. ` +
+          `Add one of them, pointing at ${issuerManifestUrl.href}.`,
+      ),
+      fetches,
+    };
   }
 
-  const verdict = evaluateServedManifest({ body: result.body, domain, verificationId, jwks: getPublicJwks() });
-  return [
-    { ...domainBase, ...verdict.domainMatch, details: [] },
-    { ...expiryBase, ...verdict.expiry, details: [] },
-  ];
+  const linkUrl = new URL(href);
+  if (linkUrl.protocol !== "https:" || !allowed(linkUrl)) {
+    return {
+      checks: fail(`The <link rel="${MANIFEST_LINK_REL}"> tag points to ${href}; it must point to ${issuerManifestUrl.href} or a URL on ${domain}.`),
+      fetches,
+    };
+  }
+  const linked = await safeFetchText(href, { allowRedirect: allowed });
+  fetches.push(linked);
+  if (!linked.ok) return { checks: fail(`Could not load the linked manifest ${href}: ${linked.error}`), fetches };
+  if (linked.status >= 300) return { checks: fail(`The linked manifest ${href} returned HTTP ${linked.status}.`), fetches };
+  return { checks: evaluate(linked.body, `<link rel="${MANIFEST_LINK_REL}">`), fetches };
+}
+
+const DOMAIN_CHECK = { id: "domain_match", label: "Manifest is served for its own domain" } as const;
+const EXPIRY_CHECK = { id: "expiry", label: "Served manifest has not expired" } as const;
+
+/** True if the body parses as a JSON object shaped like a manifest (not, say, a JSON error page). */
+export function looksLikeManifest(body: string): boolean {
+  try {
+    const parsed = JSON.parse(body);
+    return typeof parsed === "object" && parsed !== null && "site" in parsed && "issuer" in parsed;
+  } catch {
+    return false;
+  }
 }
 
 async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {

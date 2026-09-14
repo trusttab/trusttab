@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/trusttab/trusttab/main/agent-trust.schema.json",
   "title": "TrustTab agent-trust manifest",
-  "description": "Declares which forms on a site are safe and correctly structured for an AI agent to act on. Served at /.well-known/agent-trust.json. Version 1.0 (DRAFT — subject to change until the first stable release).",
+  "description": "Declares which forms on a site are safe and correctly structured for an AI agent to act on. Served at /.well-known/agent-trust.json, or linked from the homepage <head> with <link rel=\"agent-trust-manifest\" href=\"...\"> on platforms that reserve /.well-known/. Version 1.0 (DRAFT — subject to change until the first stable release).",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "issuer", "site", "policy", "endpoints"],
