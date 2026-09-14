@@ -1,6 +1,7 @@
 import "server-only";
 
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { headers } from "next/headers";
@@ -32,6 +33,13 @@ const issuerName = () => process.env.TRUSTTAB_ISSUER_NAME || "TrustTab";
  */
 function sendInBackground(email: Email, purpose: string) {
   after(() => sendEmail(email).catch((err) => console.error(`[email] Failed to send ${purpose} email`, err)));
+}
+
+/** Tells the owner their password changed, if this deployment can send email. */
+function notifyPasswordChanged(to: string, via: "reset" | "change") {
+  if (!emailEnabled) return;
+  const loginUrl = `${process.env.BETTER_AUTH_URL ?? ""}/login`;
+  sendInBackground({ to, ...passwordChangedEmail({ issuerName: issuerName(), loginUrl, via }) }, "password changed");
 }
 
 /**
@@ -74,8 +82,7 @@ export const auth = betterAuth({
       if (!user.emailVerified) {
         await db.update(schema.users).set({ emailVerified: true }).where(eq(schema.users.id, user.id));
       }
-      const loginUrl = `${process.env.BETTER_AUTH_URL ?? ""}/login`;
-      sendInBackground({ to: user.email, ...passwordChangedEmail({ issuerName: issuerName(), loginUrl }) }, "password changed");
+      notifyPasswordChanged(user.email, "reset");
     },
   },
   emailVerification: {
@@ -89,6 +96,16 @@ export const auth = betterAuth({
       const content = verificationEmail({ url, issuerName: issuerName(), expiresInMinutes: VERIFICATION_LINK_TTL_SECONDS / 60 });
       sendInBackground({ to: user.email, ...content }, "verification");
     },
+  },
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      // Signed-in password change (/dashboard/account). The client always asks
+      // to revoke other sessions; here we send the same "password changed"
+      // notice as a reset, but only if the change actually succeeded.
+      if (ctx.path !== "/change-password" || isAPIError(ctx.context.returned)) return;
+      const email = ctx.context.session?.user.email;
+      if (email) notifyPasswordChanged(email, "change");
+    }),
   },
   rateLimit: {
     // Better Auth's default rules (e.g. 3 sign-in/sign-up attempts per 10s per

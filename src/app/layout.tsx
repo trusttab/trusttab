@@ -38,7 +38,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
                   <Link href="/dashboard" className="hover:underline">
                     Dashboard
                   </Link>
-                  <span className="hidden text-zinc-500 sm:inline">{session.user.email}</span>
+                  <Link href="/dashboard/account" className="hover:underline" title={session.user.email}>
+                    Account
+                  </Link>
                   <SignOutButton />
                 </>
               ) : (

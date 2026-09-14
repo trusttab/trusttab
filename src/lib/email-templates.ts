@@ -48,12 +48,16 @@ export function passwordResetEmail(args: { url: string; issuerName: string; expi
   return { subject, text, html };
 }
 
-/** Sent after a successful reset, so an owner learns if someone else changed their password. */
-export function passwordChangedEmail(args: { issuerName: string; loginUrl: string }) {
-  const { issuerName, loginUrl } = args;
+/**
+ * Sent after a password reset or change, so an owner learns if someone else
+ * changed their password. `via` only affects which sessions were signed out.
+ */
+export function passwordChangedEmail(args: { issuerName: string; loginUrl: string; via: "reset" | "change" }) {
+  const { issuerName, loginUrl, via } = args;
+  const signedOut = via === "reset" ? "you've been signed out on all devices" : "all your other devices have been signed out";
   const subject = `Your ${issuerName} password was changed`;
   const text = [
-    `The password for your ${issuerName} account was just changed, and you've been signed out on all devices.`,
+    `The password for your ${issuerName} account was just changed, and ${signedOut}.`,
     "",
     `If this was you, no action is needed: ${loginUrl}`,
     "",
@@ -61,7 +65,7 @@ export function passwordChangedEmail(args: { issuerName: string; loginUrl: strin
   ].join("\n");
 
   const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#18181b">
-  <p>The password for your ${escapeHtml(issuerName)} account was just changed, and you've been signed out on all devices.</p>
+  <p>The password for your ${escapeHtml(issuerName)} account was just changed, and ${signedOut}.</p>
   <p>If this was you, no action is needed.</p>
   <p>If it wasn't you, someone may have access to your email account. Secure your email, then use <strong>Forgot password?</strong> on the <a href="${escapeHtml(loginUrl)}">login page</a> to set a new password.</p>
 </div>`;

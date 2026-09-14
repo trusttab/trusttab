@@ -435,6 +435,14 @@ rather than silently changing direction.
   `/forgot-password` says reset is unavailable, rather than promising an
   email that never arrives. Requests are rate-limited by Better Auth's
   built-in rule (3 per 60s per IP).
+- **2026-09-14 — Change password at `/dashboard/account`.** Better Auth's
+  `/change-password` (requires the current password; rate-limited to 3 per
+  10s). The client always sends `revokeOtherSessions: true`, with no opt-out:
+  the current device stays signed in and every other session is revoked,
+  matching the reset flow's "lock out anyone with the old password" rule. A
+  `hooks.after` middleware emails the same "password changed" notice (worded
+  for other devices) only when the change succeeded, and only if email is
+  enabled. The header links to Account.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

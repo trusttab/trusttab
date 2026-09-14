@@ -48,13 +48,17 @@ describe("password emails", () => {
     assert.match(email.text, /expires in 60 minutes and can be used once/);
   });
   test("changed notice tells the owner what to do if it wasn't them", () => {
-    const email = passwordChangedEmail({ issuerName: "TrustTab", loginUrl: "https://issuer.test/login" });
+    const email = passwordChangedEmail({ issuerName: "TrustTab", loginUrl: "https://issuer.test/login", via: "reset" });
     assert.match(email.text, /signed out on all devices/);
+    assert.match(
+      passwordChangedEmail({ issuerName: "TrustTab", loginUrl: "https://issuer.test/login", via: "change" }).text,
+      /all your other devices have been signed out/,
+    );
     assert.match(email.text, /If it wasn't you/);
     assert.ok(email.html.includes('href="https://issuer.test/login"'));
   });
   test("escapes injected values", () => {
-    const email = passwordChangedEmail({ issuerName: "<img src=x>", loginUrl: 'javascript:"x' });
+    const email = passwordChangedEmail({ issuerName: "<img src=x>", loginUrl: 'javascript:"x', via: "change" });
     assert.doesNotMatch(email.html, /<img src=x>|href="javascript:"x"/);
   });
 });
