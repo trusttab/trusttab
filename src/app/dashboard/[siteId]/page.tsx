@@ -2,13 +2,26 @@ import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ManifestEditor } from "@/components/manifest-editor";
 import { OwnershipPanel } from "@/components/ownership-panel";
+import { PublishedManifest } from "@/components/published-manifest";
 import { StatusPill } from "@/components/status-pill";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
 import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
+import { getLatestManifest, isManifestExpired } from "@/lib/manifest/queries";
+import type { Manifest, ManifestInput } from "@/lib/manifest/types";
 import { verificationSnippet } from "@/lib/ownership";
+
+/** Extracts the owner-editable parts of a published manifest to prefill the editor. */
+function toInput(manifest: Manifest): ManifestInput {
+  return {
+    no_prompt_injection_pledge: manifest.policy.no_prompt_injection_pledge,
+    agent_rate_limit: manifest.policy.agent_rate_limit,
+    endpoints: manifest.endpoints,
+  };
+}
 
 export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) {
   const user = await requireUser();
@@ -20,6 +33,9 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     .from(sites)
     .where(and(eq(sites.id, siteId), eq(sites.userId, user.id)));
   if (!site) notFound();
+
+  const latest = site.ownershipVerifiedAt ? await getLatestManifest(site.id) : undefined;
+  const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
     <div className="space-y-8">
@@ -40,10 +56,33 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
         ownershipVerifiedAt={site.ownershipVerifiedAt?.toISOString() ?? null}
       />
 
-      {/* Placeholders so the shape of the finished page is visible. */}
+      {site.ownershipVerifiedAt ? (
+        <>
+          {latest && issuerUrl && (
+            <PublishedManifest
+              manifest={latest}
+              domain={site.domain}
+              issuerUrl={issuerUrl}
+              expired={isManifestExpired(latest.expiresAt)}
+            />
+          )}
+          {!issuerUrl && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              This TrustTab instance has no issuer configured (TRUSTTAB_ISSUER_NAME /
+              TRUSTTAB_ISSUER_URL), so manifests can&apos;t be published yet.
+            </p>
+          )}
+          <ManifestEditor siteId={site.id} initial={latest ? toInput(latest.payloadJson) : null} />
+        </>
+      ) : (
+        <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-500">
+          Verify ownership to start declaring your agent-ready forms.
+        </section>
+      )}
+
+      {/* Placeholder so the shape of the finished page is visible. */}
       <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-500">
-        Manifest editor, endpoint checks, badge snippet and traffic log will appear here once
-        ownership is verified. (Coming in later build days.)
+        Endpoint checks, badge snippet and traffic log will appear here. (Coming in later build days.)
       </section>
     </div>
   );

@@ -24,6 +24,7 @@ See "Self-hosting / local development" in the [README](./README.md). Before
 opening a pull request, run:
 
 ```bash
+npm test
 npm run lint
 npm run typecheck
 npm run build

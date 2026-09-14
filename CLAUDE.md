@@ -71,10 +71,10 @@ has one concrete architectural implication:
 - **Styling:** Tailwind
 - **HTML parsing:** `cheerio`
 - **Schema validation:** `ajv`
-- **Signing:** RFC 9421 HTTP Message Signatures with Ed25519 (same standard
-  Visa's Trusted Agent Protocol uses — if this proves too heavy to implement
-  cleanly in the time available, fall back to HMAC-SHA256 over canonical
-  JSON and flag it as a known upgrade path, don't block the build on this)
+- **Signing:** Ed25519 over RFC 8785 canonical JSON, stored in
+  `site.signature` as a detached compact JWS (`header..signature`, `kid` in the
+  header). Public keys at `/.well-known/jwks.json`. *(Changed from RFC 9421 on
+  Day 2 — see Decisions log.)*
 - **Deploy:** Vercel, redeployed continuously from day 1
 
 One codebase. Every feature is a page or an API route in this one project.
@@ -157,8 +157,10 @@ GET  /api/badge/[siteId].svg           public — dynamically rendered badge ima
 
 ## Manifest schema
 
-Full JSON Schema lives in `agent-trust.schema.json` at repo root (already
-written — port it in directly, don't rewrite it). Validate with `ajv`.
+Full JSON Schema lives in `agent-trust.schema.json` at repo root (JSON Schema
+2020-12, validated with `ajv`). It was drafted on Day 2 from the core shape
+below because the original file never existed — it is a **draft** until the
+owner signs off; see Decisions log.
 
 Core shape:
 
@@ -296,12 +298,38 @@ rather than silently changing direction.
   domain; only one may hold a *verified* claim (partial unique index). The
   meta tag only counts inside `<head>`, and redirects are only followed between
   `domain` and `www.domain`.
+- **2026-09-14 — Schema drafted in-repo.** `agent-trust.schema.json` didn't
+  exist, so it was written from the core shape above. Additions beyond that
+  shape: `verification_id` pattern `^tt_[a-z0-9]{8,32}$`; `method` limited to
+  GET/POST (HTML forms); field types `string number boolean email phone url
+  date file`, `array<T>`, `enum[a,b]`, `?` for optional; `content_scan.status`
+  `pending|passed|failed`; `no_prompt_injection_pledge` must be `true`;
+  `additionalProperties: false` everywhere.
+- **2026-09-14 — Ed25519 + canonical JSON instead of RFC 9421.** RFC 9421
+  signs an HTTP message, so a manifest copied or cached elsewhere (e.g. to a
+  customer's `/.well-known` path) would lose its signature. HMAC can't be
+  verified by third parties at all. A detached JWS over RFC 8785 canonical
+  JSON travels with the document, uses Node's built-in crypto, and is
+  verifiable with the public JWKS. RFC 9421 response signing can be added on
+  top later.
+- **2026-09-14 — Manifest lifecycle.** Each publish creates an immutable
+  signed version (`manifests.version` is a per-site revision counter; the
+  payload's `version` is the format version `"1.0"`). A newly published
+  manifest has `site.verified_at: null` and `content_scan.status: "pending"`;
+  the Day 3 verification engine re-issues it once checks pass. Manifests
+  expire 30 days after issue. `verification_id` is per site and stable across
+  versions. Publishing requires verified domain ownership.
 
 ## Open questions
 
-- `agent-trust.schema.json` is referenced above as "already written", but it
-  was not in the repository or alongside CLAUDE.md on Day 1. It is needed
-  before Day 2 (manifest generator).
+- Schema v1.0 is a draft pending owner review: especially the field-type
+  grammar (base types beyond the spec's `string`) and nullable `verified_at`.
+- Signing key backup/rotation: production's key is stored only as a Vercel
+  sensitive env var. JWKS supports multiple keys, but there's no rotation
+  tooling yet.
+- `/.well-known/agent-trust.json` on customer sites redirects to TrustTab. Day
+  3's domain-match check must accept exactly that redirect (to
+  `<issuer>/api/manifest/<same domain>`) and nothing else.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

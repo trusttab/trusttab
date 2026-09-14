@@ -1,0 +1,42 @@
+import { normalizeDomain } from "@/lib/domain";
+import { getLiveManifestForDomain } from "@/lib/manifest/queries";
+
+const publicHeaders = {
+  // Agents may fetch this from browsers on any origin.
+  "access-control-allow-origin": "*",
+  "x-content-type-options": "nosniff",
+};
+
+/**
+ * GET /api/manifest/:domain — public. Serves the live signed manifest for a
+ * domain, exactly as signed. Site owners point
+ * https://<domain>/.well-known/agent-trust.json here (by redirect or proxy).
+ *
+ * An expired manifest is still served: `site.expires_at` is part of the signed
+ * document, and consumers must check it themselves.
+ */
+export async function GET(_request: Request, ctx: RouteContext<"/api/manifest/[domain]">) {
+  const { domain: rawDomain } = await ctx.params;
+  const normalized = normalizeDomain(decodeURIComponent(rawDomain));
+  if (!normalized.ok) {
+    return Response.json({ error: "Invalid domain." }, { status: 400, headers: publicHeaders });
+  }
+
+  const manifest = await getLiveManifestForDomain(normalized.domain);
+  if (!manifest) {
+    return Response.json(
+      { error: `No TrustTab manifest is published for ${normalized.domain}.` },
+      { status: 404, headers: publicHeaders },
+    );
+  }
+
+  return new Response(JSON.stringify(manifest.payloadJson, null, 2), {
+    headers: {
+      ...publicHeaders,
+      "content-type": "application/json; charset=utf-8",
+      // Short cache: a re-published or re-verified manifest should show up fast.
+      "cache-control": "public, max-age=60",
+      "x-trusttab-manifest-version": String(manifest.version),
+    },
+  });
+}

@@ -20,6 +20,8 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -27,6 +29,9 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+// Relative (not "@/") because drizzle-kit loads this file outside Next.js.
+import type { Manifest } from "../lib/manifest/types";
 
 // ---------------------------------------------------------------------------
 // Auth (Better Auth)
@@ -121,6 +126,11 @@ export const sites = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     /** Normalized hostname, e.g. `example.com` (lowercase, punycode, no `www.`). */
     domain: text("domain").notNull(),
+    /**
+     * Public registry ID (`tt_…`) that appears in manifests and badge lookups.
+     * Assigned when the first manifest is published; stable across versions.
+     */
+    verificationId: text("verification_id").unique(),
     /** Random token the owner must publish in a `<meta name="agenttrust-verify">` tag. */
     verificationToken: text("verification_token").notNull(),
     ownershipVerifiedAt: timestamp("ownership_verified_at", { withTimezone: true }),
@@ -141,3 +151,50 @@ export const sites = pgTable(
 );
 
 export type Site = typeof sites.$inferSelect;
+
+/**
+ * Every published manifest is kept as an immutable, signed version. The live
+ * manifest for a site is the one with the highest `version`.
+ */
+export const manifests = pgTable(
+  "manifests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** Per-site revision number (1, 2, 3…). Not the manifest *format* version. */
+    version: integer("version").notNull(),
+    /** The exact signed manifest document, as served. */
+    payloadJson: jsonb("payload_json").$type<Manifest>().notNull(),
+    signature: text("signature").notNull(),
+    /** Set when the verification checks pass (Day 3). Null until then. */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("manifests_site_version_uniq").on(t.siteId, t.version)],
+);
+
+/**
+ * Denormalized copy of each manifest's endpoints, so the verification engine
+ * and dashboard can query endpoints without unpacking JSON.
+ */
+export const manifestEndpoints = pgTable(
+  "manifest_endpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    manifestId: uuid("manifest_id")
+      .notNull()
+      .references(() => manifests.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    method: text("method").notNull(),
+    // Plain text rather than a Postgres enum: the allowed values are defined
+    // (and grow) in agent-trust.schema.json, which validates every write.
+    purpose: text("purpose").notNull(),
+    schemaJson: jsonb("schema_json").$type<Record<string, string>>().notNull(),
+    agentSafe: boolean("agent_safe").notNull(),
+    requiresCaptcha: boolean("requires_captcha").notNull(),
+  },
+  (t) => [index("manifest_endpoints_manifest_id_idx").on(t.manifestId)],
+);
