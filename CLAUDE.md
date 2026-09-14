@@ -405,6 +405,12 @@ rather than silently changing direction.
   default. Note that Better Auth resolves the IP itself and puts all requests
   with no usable `x-forwarded-for` into one shared bucket, unlike the public
   endpoints, which skip limiting in that case.
+- **2026-09-14 — The public `/verify/:id` page is rate-limited in
+  `src/proxy.ts`** (Next 16's renamed middleware, Node.js runtime), because
+  a page can't return a 429 itself. 60 requests/minute per IP through the
+  shared Postgres limiter; the 429 is a small HTML page with `no-store`.
+  The proxy matcher covers only that page. API routes enforce their own
+  limits.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

@@ -93,7 +93,7 @@ authorized to act for someone. TrustTab is complementary: it verifies the
 
 All public endpoints send `Access-Control-Allow-Origin: *` and are rate-limited
 per client IP (120 requests/minute for the manifest and verify endpoints, 300
-for badges). Requests to the manifest and verify endpoints appear in the site
+for badges, and 60 for the human-readable `/verify/:verificationId` page). Requests to the manifest and verify endpoints appear in the site
 owner's traffic log.
 
 **Privacy:** the traffic log stores only a truncated client IP (IPv4 /24, IPv6
@@ -278,6 +278,7 @@ src/
     dashboard/          signed-in UI
   components/           UI components
   db/                   Drizzle schema and client
+  proxy.ts              request proxy (rate-limits the public verification page)
   lib/
     auth.ts             Better Auth config and session helpers
     domain.ts           domain normalization and validation

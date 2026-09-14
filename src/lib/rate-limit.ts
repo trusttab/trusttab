@@ -25,6 +25,8 @@ export const PUBLIC_LIMITS = {
   api: { limit: 120, windowSeconds: 60 },
   /** Badge images, per IP (pages embedding a badge may load it often). */
   badge: { limit: 300, windowSeconds: 60 },
+  /** The public HTML verification page (badge link target), per IP. Humans click it; scrapers loop it. */
+  page: { limit: 60, windowSeconds: 60 },
 } as const;
 
 export type Bucket = keyof typeof PUBLIC_LIMITS;
