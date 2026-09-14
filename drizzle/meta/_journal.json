@@ -15,6 +15,13 @@
       "when": 1789417367177,
       "tag": "0001_manifests",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789419517505,
+      "tag": "0002_verification_runs",
+      "breakpoints": true
     }
   ]
 }

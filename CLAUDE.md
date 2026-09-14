@@ -319,6 +319,29 @@ rather than silently changing direction.
   the Day 3 verification engine re-issues it once checks pass. Manifests
   expire 30 days after issue. `verification_id` is per site and stable across
   versions. Publishing requires verified domain ownership.
+- **2026-09-14 — Verification engine (Day 3).** All five checks are
+  implemented; `sites.status` is `verified` only if all pass. Mapping:
+  injection content found → `failed`; any other failure → `needs_fix`.
+  Publishing a new manifest resets status to `pending`.
+  - Endpoint match requires every declared field (optional ones included) in
+    a single server-rendered `<form>`. `method` mismatches are a note, not a
+    failure, because JS-submitted forms often omit `method`.
+  - Injection scan: three unambiguous phrase patterns anywhere (text,
+    comments, text attributes), plus hidden text (inline styles / `hidden`
+    only) that both names an AI and directs it. `<script>`/`<style>` are not
+    scanned. Tuned against false positives with a committed fixture suite.
+  - Domain match and expiry are evaluated on what
+    `https://<domain>/.well-known/agent-trust.json` actually serves: correct
+    `site.domain`, this site's `verification_id`, and a valid signature from
+    this issuer. Redirects are allowed within the site and to exactly
+    `<issuer>/api/manifest/<domain>`.
+  - SSL passes if no fetch hit a certificate error and at least one HTTPS
+    fetch succeeded.
+  - Every run re-issues the manifest as a new signed version reflecting the
+    result (`verified_at`, `content_scan`, fresh 30-day expiry), so the public
+    manifest never overstates the latest run. Versions therefore grow with
+    each re-check.
+  - 20-second per-site cooldown between runs.
 
 ## Open questions
 
@@ -327,9 +350,9 @@ rather than silently changing direction.
 - Signing key backup/rotation: production's key is stored only as a Vercel
   sensitive env var. JWKS supports multiple keys, but there's no rotation
   tooling yet.
-- `/.well-known/agent-trust.json` on customer sites redirects to TrustTab. Day
-  3's domain-match check must accept exactly that redirect (to
-  `<issuer>/api/manifest/<same domain>`) and nothing else.
+- Forms rendered only client-side (SPAs) can't pass endpoint match. A
+  headless-browser fetch would fix this but is heavy for serverless.
+- Injection scan ignores class-based CSS hiding and `<script>` content.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

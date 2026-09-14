@@ -1,11 +1,12 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db";
-import { manifestEndpoints, manifests, sites } from "@/db/schema";
+import { sites } from "@/db/schema";
 import { getApiUser, isUniqueViolation, isUuid, jsonError } from "@/lib/api";
 import { buildManifest, generateVerificationId } from "@/lib/manifest/build";
 import { signManifest } from "@/lib/manifest/signing";
+import { insertManifestVersion } from "@/lib/manifest/store";
 import type { ManifestInput } from "@/lib/manifest/types";
 import { validateManifest } from "@/lib/manifest/validate";
 
@@ -25,7 +26,8 @@ const MAX_BODY_BYTES = 200_000;
  *
  * TrustTab fills in issuer, domain, timestamps and scan status, signs the
  * result, validates the *signed* document against agent-trust.schema.json,
- * and stores it as the site's next version. Responds 201 with the manifest,
+ * and stores it as the site's next version (resetting the site's status to
+ * "pending" until it is re-verified). Responds 201 with the manifest,
  * or 422 with `{ error, details: [{ path, message }] }`.
  *
  * Requires domain ownership to be verified first.
@@ -90,33 +92,9 @@ export async function POST(request: Request, ctx: RouteContext<"/api/sites/[id]/
 
   try {
     const saved = await db.transaction(async (tx) => {
-      const [{ next }] = await tx
-        .select({ next: sql<number>`coalesce(max(${manifests.version}), 0) + 1` })
-        .from(manifests)
-        .where(eq(manifests.siteId, site.id));
-
-      const [row] = await tx
-        .insert(manifests)
-        .values({
-          siteId: site.id,
-          version: next,
-          payloadJson: manifest,
-          signature: manifest.site.signature,
-          expiresAt: new Date(manifest.site.expires_at),
-        })
-        .returning({ id: manifests.id, version: manifests.version });
-
-      await tx.insert(manifestEndpoints).values(
-        manifest.endpoints.map((e) => ({
-          manifestId: row.id,
-          path: e.path,
-          method: e.method,
-          purpose: e.purpose,
-          schemaJson: e.schema,
-          agentSafe: e.agent_safe,
-          requiresCaptcha: e.requires_captcha,
-        })),
-      );
+      const row = await insertManifestVersion(tx, site.id, manifest);
+      // New declarations haven't been checked, so the site is no longer verified.
+      await tx.update(sites).set({ status: "pending" }).where(eq(sites.id, site.id));
       return row;
     });
 

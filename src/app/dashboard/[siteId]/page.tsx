@@ -5,12 +5,13 @@ import { notFound } from "next/navigation";
 import { ManifestEditor } from "@/components/manifest-editor";
 import { OwnershipPanel } from "@/components/ownership-panel";
 import { PublishedManifest } from "@/components/published-manifest";
-import { StatusPill } from "@/components/status-pill";
+import { siteStatusLabel, siteStatusTone, StatusPill } from "@/components/status-pill";
+import { VerificationPanel } from "@/components/verification-panel";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
 import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
-import { getLatestManifest, isManifestExpired } from "@/lib/manifest/queries";
+import { getLatestManifest, getLatestVerificationRun, isManifestExpired } from "@/lib/manifest/queries";
 import type { Manifest, ManifestInput } from "@/lib/manifest/types";
 import { verificationSnippet } from "@/lib/ownership";
 
@@ -34,7 +35,9 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     .where(and(eq(sites.id, siteId), eq(sites.userId, user.id)));
   if (!site) notFound();
 
-  const latest = site.ownershipVerifiedAt ? await getLatestManifest(site.id) : undefined;
+  const [latest, lastRun] = site.ownershipVerifiedAt
+    ? await Promise.all([getLatestManifest(site.id), getLatestVerificationRun(site.id)])
+    : [undefined, undefined];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -45,7 +48,7 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-2xl font-semibold">{site.domain}</h1>
-          <StatusPill tone="neutral">Status: {site.status}</StatusPill>
+          <StatusPill tone={siteStatusTone(site.status)}>{siteStatusLabel[site.status]}</StatusPill>
         </div>
       </div>
 
@@ -66,6 +69,7 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
               expired={isManifestExpired(latest.expiresAt)}
             />
           )}
+          <VerificationPanel siteId={site.id} domain={site.domain} run={lastRun} canRun={Boolean(latest)} />
           {!issuerUrl && (
             <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
               This TrustTab instance has no issuer configured (TRUSTTAB_ISSUER_NAME /
@@ -82,7 +86,7 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
 
       {/* Placeholder so the shape of the finished page is visible. */}
       <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-500">
-        Endpoint checks, badge snippet and traffic log will appear here. (Coming in later build days.)
+        Badge snippet and traffic log will appear here. (Coming in a later build day.)
       </section>
     </div>
   );

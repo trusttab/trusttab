@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
-import type { ManifestInput, UnsignedManifest } from "./types";
+import type { Manifest, ManifestInput, UnsignedManifest } from "./types";
 
 /** How long a signed manifest stays valid before it must be re-issued. */
 export const MANIFEST_TTL_DAYS = 30;
@@ -25,6 +25,33 @@ export function generateVerificationId(): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
   const bytes = randomBytes(12);
   return `tt_${Array.from(bytes, (b) => alphabet[b % 32]).join("")}`;
+}
+
+/**
+ * Re-issues an existing manifest after a verification run: same declarations,
+ * new verification state, fresh expiry, current issuer identity. The caller
+ * signs the result.
+ */
+export function reissueManifest(
+  previous: Manifest,
+  outcome: { verified: boolean; scanStatus: "passed" | "failed" | "pending"; now?: Date },
+): UnsignedManifest {
+  const now = outcome.now ?? new Date();
+  const { signature: _signature, ...site } = previous.site;
+  void _signature;
+  return {
+    ...previous,
+    issuer: { ...getIssuer(), verification_id: previous.issuer.verification_id },
+    site: {
+      ...site,
+      verified_at: outcome.verified ? now.toISOString() : null,
+      expires_at: new Date(now.getTime() + MANIFEST_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    policy: {
+      ...previous.policy,
+      content_scan: { last_scanned: now.toISOString(), status: outcome.scanStatus },
+    },
+  };
 }
 
 /**

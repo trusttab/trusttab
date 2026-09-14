@@ -26,7 +26,12 @@ export function PublishedManifest({
           <span className={expired ? "font-medium text-red-700" : undefined}>
             {expired ? "expired" : "expires"} {manifest.expiresAt.toLocaleDateString()}
           </span>{" "}
-          · verification checks: <span className="font-medium">not run yet</span>
+          ·{" "}
+          {manifest.verifiedAt ? (
+            <span className="font-medium text-emerald-700">verified {manifest.verifiedAt.toLocaleString()}</span>
+          ) : (
+            <span className="font-medium">not verified</span>
+          )}
         </p>
       </div>
 
@@ -38,7 +43,7 @@ export function PublishedManifest({
           </a>
         </p>
         <p>
-          Make it available at <code className="font-mono">https://{domain}/.well-known/agent-trust.json</code>{" "}
+          Required for verification: make it available at <code className="font-mono">https://{domain}/.well-known/agent-trust.json</code>{" "}
           by adding a redirect (or proxy) from that path to the public URL. For example, on Vercel
           (<code className="font-mono">vercel.json</code>):
         </p>

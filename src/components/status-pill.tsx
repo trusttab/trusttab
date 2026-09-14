@@ -4,6 +4,20 @@ const tones = {
   neutral: "bg-zinc-100 text-zinc-700 ring-zinc-200",
 } as const;
 
+/** Pill tone for a `sites.status` value. */
+export function siteStatusTone(status: string): keyof typeof tones {
+  if (status === "verified") return "good";
+  if (status === "failed" || status === "needs_fix") return "bad";
+  return "neutral";
+}
+
+export const siteStatusLabel: Record<string, string> = {
+  pending: "Not verified yet",
+  verified: "Verified",
+  needs_fix: "Needs fixes",
+  failed: "Failed",
+};
+
 export function StatusPill({
   tone,
   children,

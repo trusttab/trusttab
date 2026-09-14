@@ -6,8 +6,8 @@ form, a booking page, a support ticket), verifies that claim automatically, and
 issues a badge that anyone can check against a public registry.
 
 > **Status: early development.** This repository is being built in the open.
-> Today it covers accounts, domain-ownership verification and signed
-> manifests; verification checks and the badge are next (see [Roadmap](#roadmap)).
+> Today it covers accounts, domain-ownership verification, signed manifests
+> and the verification checks; the public badge is next (see [Roadmap](#roadmap)).
 
 ## Why this exists
 
@@ -45,13 +45,23 @@ authorized to act for someone. TrustTab is complementary: it verifies the
 2. **Declare your agent-safe endpoints.** Describe each form: its path,
    method, purpose (from a fixed, centrally maintained list such as
    `lead_inquiry` or `booking`) and field schema. TrustTab signs the manifest
-   and serves it. *(Available today — checks come next.)*
+   and serves it. Redirect `/.well-known/agent-trust.json` on your site to
+   the manifest URL TrustTab shows you. *(Available today.)*
 
 3. **Get checked.** TrustTab confirms each declared form exists with the
    declared fields, scans the page for hidden prompt-injection content,
    checks HTTPS, and makes sure the manifest's domain matches the domain
-   serving it. Passing sites get a badge backed by a public lookup endpoint.
-   *(In progress.)*
+   serving it. Click **Re-check now** to run the checks; passing sites are
+   marked verified and their manifest is re-signed with `verified_at`.
+   *(Available today; the public badge is in progress.)*
+
+   | Check | Passes when |
+   | --- | --- |
+   | Endpoint match | Each declared page has a server-rendered `<form>` containing every declared field name |
+   | Injection scan | No instruction-override phrases or chat-template markers, and no hidden text directing AI agents |
+   | HTTPS | Pages load over HTTPS with valid certificates |
+   | Domain match | `/.well-known/agent-trust.json` serves a manifest signed for *this* domain and registration |
+   | Expiry | That served manifest hasn't expired |
 
 ## The manifest
 
@@ -191,7 +201,7 @@ npm run dev                  # http://localhost:3000
 src/
   app/                  pages and API routes (App Router)
     api/auth/[...all]   Better Auth endpoints
-    api/sites/          domain claims, ownership checks, manifest publishing
+    api/sites/          domain claims, ownership checks, manifest publishing, verification
     api/manifest/       public manifest lookup
     .well-known/        public signing keys (JWKS)
     dashboard/          signed-in UI
@@ -203,6 +213,7 @@ src/
     ownership.ts        verification token and meta-tag check
     safe-fetch.ts       SSRF-hardened fetch for user-supplied sites
     manifest/           build, canonicalize, sign, validate manifests
+    verification/       verification checks and engine
 agent-trust.schema.json manifest format (JSON Schema)
 drizzle/                generated SQL migrations
 ```
@@ -212,7 +223,7 @@ drizzle/                generated SQL migrations
 - [x] Accounts (email/password)
 - [x] Domain claim + ownership verification via meta tag
 - [x] Manifest generator: declare endpoints, validate against the schema, sign, serve at `/api/manifest/[domain]`
-- [ ] Verification engine: endpoint/field match, prompt-injection scan, HTTPS, domain match, expiry
+- [x] Verification engine: endpoint/field match, prompt-injection scan, HTTPS, domain match, expiry
 - [ ] Public verify endpoint, badge SVG, request log
 - [ ] Scheduled re-verification
 

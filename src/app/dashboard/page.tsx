@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 
-import { StatusPill } from "@/components/status-pill";
+import { siteStatusLabel, siteStatusTone, StatusPill } from "@/components/status-pill";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
                   <StatusPill tone={site.ownershipVerifiedAt ? "good" : "neutral"}>
                     {site.ownershipVerifiedAt ? "Ownership verified" : "Ownership unverified"}
                   </StatusPill>
-                  <StatusPill tone="neutral">Status: {site.status}</StatusPill>
+                  <StatusPill tone={siteStatusTone(site.status)}>{siteStatusLabel[site.status]}</StatusPill>
                 </span>
               </Link>
             </li>

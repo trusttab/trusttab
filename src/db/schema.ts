@@ -32,6 +32,7 @@ import {
 
 // Relative (not "@/") because drizzle-kit loads this file outside Next.js.
 import type { Manifest } from "../lib/manifest/types";
+import type { VerificationResults } from "../lib/verification/types";
 
 // ---------------------------------------------------------------------------
 // Auth (Better Auth)
@@ -174,6 +175,25 @@ export const manifests = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("manifests_site_version_uniq").on(t.siteId, t.version)],
+);
+
+/** One row per "Re-check now": the outcome of every verification check. */
+export const verificationRuns = pgTable(
+  "verification_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** The manifest version that was checked. */
+    manifestId: uuid("manifest_id")
+      .notNull()
+      .references(() => manifests.id, { onDelete: "cascade" }),
+    passed: boolean("passed").notNull(),
+    resultsJson: jsonb("results_json").$type<VerificationResults>().notNull(),
+    runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("verification_runs_site_run_at_idx").on(t.siteId, t.runAt)],
 );
 
 /**

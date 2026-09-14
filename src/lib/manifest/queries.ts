@@ -3,10 +3,20 @@ import "server-only";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { manifests, sites } from "@/db/schema";
+import { manifests, sites, verificationRuns } from "@/db/schema";
 
 export function isManifestExpired(expiresAt: Date, now = new Date()): boolean {
   return expiresAt.getTime() < now.getTime();
+}
+
+export async function getLatestVerificationRun(siteId: string) {
+  const [row] = await db
+    .select()
+    .from(verificationRuns)
+    .where(eq(verificationRuns.siteId, siteId))
+    .orderBy(desc(verificationRuns.runAt))
+    .limit(1);
+  return row;
 }
 
 /** Latest manifest row for a site (any owner state), or undefined. */
