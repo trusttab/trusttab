@@ -238,8 +238,16 @@ npm run dev                  # http://localhost:3000
    **Settings → Environment Variables**.
 4. Run migrations against the production database from your machine:
    `vercel env pull .env.production.local`, then
-   `DATABASE_URL=… npm run db:migrate`.
+   `DATABASE_URL=<direct, unpooled URL> npm run db:migrate`. With Neon, that's
+   `DATABASE_URL_UNPOOLED`. Keep the pulled file out of the repo and delete it
+   afterwards.
 5. Deploy.
+
+**Self-hosting elsewhere:** run TrustTab behind a reverse proxy that
+overwrites `X-Forwarded-For` with the real client IP. Rate limiting and the
+traffic log rely on that header, and without such a proxy clients can claim
+any IP. Accounts are limited to 10 sites (`MAX_SITES_PER_USER`) to bound
+outbound verification traffic.
 
 ### Useful scripts
 

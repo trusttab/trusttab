@@ -65,6 +65,10 @@ has one concrete architectural implication:
   the Vercel Marketplace (the successor to "Vercel Postgres").
 - **Auth:** Better Auth, email/password. *(Changed from NextAuth on Day 1 —
   see Decisions log.)*
+- **Caching on Vercel:** Vercel's CDN caches responses marked
+  `public, max-age=N` even without `s-maxage`. Endpoints that must see every
+  request (rate limiting, traffic log) send `private`, and 429s send
+  `no-store`. This was learned the hard way on Day 5.
 - **Outbound fetches:** every fetch of a user-supplied site goes through
   `src/lib/safe-fetch.ts` (HTTPS only, public IPs only, allow-listed redirects,
   size/time caps). Do not call `fetch` on user-supplied URLs directly.
@@ -387,6 +391,20 @@ rather than silently changing direction.
   are truncated before storage (IPv4 /24, IPv6 /48) and rows are pruned after
   30 days. Pruning piggybacks on writes, so no cron is needed. Existing rows
   were anonymized by a data migration.
+- **2026-09-14 — Accounts are capped at 10 sites** (`MAX_SITES_PER_USER` in
+  `src/app/api/sites/route.ts`). The per-site re-check cooldown only bounds
+  outbound verification traffic if the number of sites is bounded too. It is
+  a natural lever for paid tiers later.
+
+## Status at the end of the 5-day build (2026-09-14)
+
+Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
+Postgres, auto-deploys from `main`). The full loop works end to end: claim →
+ownership → signed manifest → checks → registry/badge/traffic log. The first
+real domain, leasetab.com (Base44), is verified for ownership and passes the
+injection scan and HTTPS. To finish, it needs the
+`<meta name="agent-trust-manifest">` tag, a self-attested `/contact`
+endpoint and a republish; it should then reach `self_declared`.
 
 ## Open questions
 
