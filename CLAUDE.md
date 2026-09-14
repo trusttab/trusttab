@@ -395,6 +395,16 @@ rather than silently changing direction.
   `src/app/api/sites/route.ts`). The per-site re-check cooldown only bounds
   outbound verification traffic if the number of sites is bounded too. It is
   a natural lever for paid tiers later.
+- **2026-09-14 — Better Auth rate limits use the shared Postgres limiter.**
+  Its built-in `storage: "database"` keys rows as `<ip>|<path>`, which would
+  store raw IPs. So `rateLimit.customStorage` (`authRateLimitStorage` in
+  `src/lib/rate-limit.ts`) persists counts in `rate_limit_buckets` under an
+  HMAC-hashed key, keeping Better Auth's per-path rules (e.g. 3
+  sign-in/sign-up attempts per 10s). Limits hold across instances (verified
+  with two servers sharing one database). Production only, per Better Auth's
+  default. Note that Better Auth resolves the IP itself and puts all requests
+  with no usable `x-forwarded-for` into one shared bucket, unlike the public
+  endpoints, which skip limiting in that case.
 
 ## Status at the end of the 5-day build (2026-09-14)
 
@@ -419,8 +429,6 @@ endpoint and a republish; it should then reach `self_declared`.
 - JS-rendered forms: confirmed on leasetab.com (Base44). Options: a hosted
   headless-render step, or an owner-declared flag with a clearly weaker check.
   Needs a product decision.
-- Better Auth's sign-in/sign-up rate limit is in-memory (per serverless
-  instance). Switch it to database storage before real traffic.
 - Rate limits trust `x-forwarded-for`, which is correct on Vercel but
   spoofable for self-hosters not behind a proxy. For serious abuse, add a
   platform/WAF rate limit.

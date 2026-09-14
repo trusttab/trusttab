@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { authRateLimitStorage } from "@/lib/rate-limit";
 
 /**
  * Better Auth server instance.
@@ -33,6 +34,13 @@ export const auth = betterAuth({
     // usable immediately after sign-up. Revisit before public launch — it
     // requires an email provider (e.g. Resend) and a sending domain.
     requireEmailVerification: false,
+  },
+  rateLimit: {
+    // Better Auth's default rules (e.g. 3 sign-in/sign-up attempts per 10s per
+    // IP) counted in Postgres rather than in memory, so they hold across
+    // serverless instances. Keys are hashed; no raw IPs are stored. Enabled in
+    // production only (Better Auth's default).
+    customStorage: authRateLimitStorage,
   },
   // Must be the last plugin: lets server actions / route handlers set cookies.
   plugins: [nextCookies()],

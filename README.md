@@ -97,8 +97,9 @@ for badges). Requests to the manifest and verify endpoints appear in the site
 owner's traffic log.
 
 **Privacy:** the traffic log stores only a truncated client IP (IPv4 /24, IPv6
-/48) and a user agent, and rows are deleted after 30 days. The rate limiter
-keys on a keyed hash of the IP and keeps no raw addresses.
+/48) and a user agent, and rows are deleted after 30 days. Rate limiting (for
+these endpoints and for sign-in/sign-up) is counted in Postgres under a keyed
+hash of the IP, so no raw addresses are stored.
 
 ## The manifest
 
@@ -298,8 +299,8 @@ drizzle/                generated SQL migrations
 - [x] `agent-trust-manifest` homepage tag discovery for platforms that reserve `/.well-known/`
 - [x] Self-attestation for forms rendered by JavaScript (shown as "Self-declared", never "Verified")
 - [x] Rate limiting and IP minimization on public endpoints
+- [x] Sign-in/sign-up rate limiting that holds across serverless instances
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
-- [ ] Rate limiting for sign-in/sign-up that holds across serverless instances
 - [ ] Scheduled re-verification
 
 ## Contributing

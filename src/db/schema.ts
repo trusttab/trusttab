@@ -220,9 +220,9 @@ export const manifestHits = pgTable(
   (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
 );
 
-/** Fixed-window request counters for public-endpoint rate limiting (see src/lib/rate-limit.ts). */
+/** Fixed-window request counters for rate limiting: public endpoints and auth (see src/lib/rate-limit.ts). */
 export const rateLimitBuckets = pgTable("rate_limit_buckets", {
-  /** `<bucket>:<HMAC of client IP>` */
+  /** HMAC of `<bucket>:<client IP>` or `auth:<ip>|<path>`; never a raw IP. */
   key: text("key").primaryKey(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
   count: integer("count").notNull(),
