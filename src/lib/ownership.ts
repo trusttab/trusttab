@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 
 import * as cheerio from "cheerio";
 
-import { safeFetchText } from "./safe-fetch";
+import { fetchSitePage } from "./site-fetch";
 
 /** Name of the meta tag a site owner adds to their homepage to prove control. */
 export const VERIFY_META_NAME = "agenttrust-verify";
@@ -48,23 +48,8 @@ export async function checkDomainOwnership(
   domain: string,
   token: string,
 ): Promise<OwnershipCheckResult> {
-  const sameSite = (url: URL) =>
-    url.protocol === "https:" &&
-    (url.hostname === domain || url.hostname === `www.${domain}`);
-
-  let checkedUrl = `https://${domain}/`;
-  let res = await safeFetchText(checkedUrl, { allowRedirect: sameSite });
-
-  // Some sites only answer on www. Only retry for connection-level failures;
-  // if the apex responded at all, that response is authoritative.
-  if (!res.ok && !res.error.startsWith("Redirected")) {
-    const wwwUrl = `https://www.${domain}/`;
-    const wwwRes = await safeFetchText(wwwUrl, { allowRedirect: sameSite });
-    if (wwwRes.ok) {
-      checkedUrl = wwwUrl;
-      res = wwwRes;
-    }
-  }
+  const { requestedUrl, result: res } = await fetchSitePage(domain, "/");
+  let checkedUrl = requestedUrl;
 
   if (!res.ok) return { verified: false, checkedUrl, reason: res.error };
   checkedUrl = res.finalUrl;
