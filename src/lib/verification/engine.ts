@@ -133,7 +133,8 @@ function checkSsl(results: SafeFetchResult[]): CheckResult {
  *    manifest-shaped JSON document, it is authoritative — pass or fail, no fallback — because
  *    that's the document agents reading the well-known path will get.
  * 2. Otherwise (404, error, or anything that isn't a manifest, such as a site
- *    builder's reserved-path error or an SPA's HTML shell), a `<link rel="agent-trust-manifest">` in the
+ *    builder's reserved-path error or an SPA's HTML shell), a
+ *    `<link rel>` or `<meta name>` "agent-trust-manifest" pointer in the
  *    homepage <head>, for platforms that reserve /.well-known/.
  *
  * Both routes may only reach URLs on the site itself or exactly this
@@ -179,7 +180,7 @@ async function discoverServedManifest(
   if (!href) {
     return {
       checks: fail(
-        `No manifest found. ${wellKnownUrl}: ${wellKnownProblem}. The homepage also has no <link rel="${MANIFEST_LINK_REL}"> tag. ` +
+        `No manifest found. ${wellKnownUrl}: ${wellKnownProblem}. The homepage <head> also has no <link rel="${MANIFEST_LINK_REL}"> or <meta name="${MANIFEST_LINK_REL}"> tag. ` +
           `Add one of them, pointing at ${issuerManifestUrl.href}.`,
       ),
       fetches,
@@ -189,7 +190,7 @@ async function discoverServedManifest(
   const linkUrl = new URL(href);
   if (linkUrl.protocol !== "https:" || !allowed(linkUrl)) {
     return {
-      checks: fail(`The <link rel="${MANIFEST_LINK_REL}"> tag points to ${href}; it must point to ${issuerManifestUrl.href} or a URL on ${domain}.`),
+      checks: fail(`The homepage's ${MANIFEST_LINK_REL} tag points to ${href}; it must point to ${issuerManifestUrl.href} or a URL on ${domain}.`),
       fetches,
     };
   }
@@ -197,7 +198,7 @@ async function discoverServedManifest(
   fetches.push(linked);
   if (!linked.ok) return { checks: fail(`Could not load the linked manifest ${href}: ${linked.error}`), fetches };
   if (linked.status >= 300) return { checks: fail(`The linked manifest ${href} returned HTTP ${linked.status}.`), fetches };
-  return { checks: evaluate(linked.body, `<link rel="${MANIFEST_LINK_REL}">`), fetches };
+  return { checks: evaluate(linked.body, `the homepage ${MANIFEST_LINK_REL} tag`), fetches };
 }
 
 const DOMAIN_CHECK = { id: "domain_match", label: "Manifest is served for its own domain" } as const;

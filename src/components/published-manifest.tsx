@@ -60,13 +60,17 @@ export function PublishedManifest({
         </div>
         <div className="space-y-1">
           <p>
-            <span className="font-medium">Option B: link tag.</span> If your platform reserves{" "}
+            <span className="font-medium">Option B: homepage tag.</span> If your platform reserves{" "}
             <code className="font-mono">/.well-known/</code> (common on Webflow, Squarespace, Wix, Base44 and similar
             builders), add this inside the <code className="font-mono">&lt;head&gt;</code> of your homepage instead:
           </p>
           <pre className="overflow-x-auto rounded-md bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-100">
-            {`<link rel="${MANIFEST_LINK_REL}" href="${publicUrl}">`}
+            {`<meta name="${MANIFEST_LINK_REL}" content="${publicUrl}">`}
           </pre>
+          <p className="text-xs text-zinc-500">
+            The equivalent <code className="font-mono">{`<link rel="${MANIFEST_LINK_REL}" href="…">`}</code> also works,
+            but some builders strip custom link tags while keeping meta tags.
+          </p>
         </div>
       </div>
 

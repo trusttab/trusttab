@@ -32,6 +32,21 @@ describe("findManifestLink", () => {
     assert.equal(findManifestLink(html, home), null);
   });
 
+  test("accepts the equivalent <meta name> form", () => {
+    const html = `<head><META NAME="Agent-Trust-Manifest" CONTENT=" https://issuer.test/api/manifest/acme.com "></head>`;
+    assert.equal(findManifestLink(html, home), "https://issuer.test/api/manifest/acme.com");
+  });
+
+  test("prefers <link> when both forms are present", () => {
+    const html = `<head><meta name="agent-trust-manifest" content="https://a.test/m"><link rel="agent-trust-manifest" href="https://b.test/m"></head>`;
+    assert.equal(findManifestLink(html, home), "https://b.test/m");
+  });
+
+  test("ignores the meta form in <body> and empty content", () => {
+    assert.equal(findManifestLink(`<html><head></head><body><meta name="agent-trust-manifest" content="https://evil.test/m"></body></html>`, home), null);
+    assert.equal(findManifestLink(`<head><meta name="agent-trust-manifest" content="  "></head>`, home), null);
+  });
+
   test("returns null for an unparseable href", () => {
     assert.equal(findManifestLink(`<head><link rel="agent-trust-manifest" href="https://[bad"></head>`, home), null);
   });
