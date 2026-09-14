@@ -43,3 +43,7 @@ next-env.d.ts
 
 # local editor/agent config
 .claude/
+
+# agent skill files installed by the Vercel/Neon integration (local only)
+.agents/
+skills-lock.json
