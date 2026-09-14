@@ -6,9 +6,9 @@ import { lookupRegistryEntry } from "@/lib/registry";
 const publicHeaders = {
   "access-control-allow-origin": "*",
   "x-content-type-options": "nosniff",
-  // Browser-side cache only (no s-maxage), so every lookup reaches the
-  // function and the traffic log stays complete.
-  "cache-control": "public, max-age=60",
+  // `private`: browser cache only. A shared/CDN cache would hide requests
+  // from the rate limiter and the traffic log.
+  "cache-control": "private, max-age=60",
 };
 
 /**

@@ -72,6 +72,8 @@ export async function enforceRateLimit(
       ...headers,
       "content-type": "application/json; charset=utf-8",
       "retry-after": String(Math.max(1, row.reset_in)),
+      // Never cacheable: a CDN caching one client's 429 would serve it to everyone.
+      "cache-control": "no-store",
     },
   });
 }

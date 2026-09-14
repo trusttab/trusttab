@@ -41,10 +41,11 @@ export async function GET(request: Request, ctx: RouteContext<"/api/manifest/[do
     headers: {
       ...publicHeaders,
       "content-type": "application/json; charset=utf-8",
-      // Short browser cache (no s-maxage, so CDN requests still reach the
-      // function and are counted in the traffic log). A re-published or
-      // re-verified manifest should show up fast.
-      "cache-control": "public, max-age=60",
+      // `private`: browsers may cache briefly, but shared caches and CDNs
+      // (including Vercel's, which caches `public, max-age`) must not, so
+      // every request reaches the function to be rate-limited and logged.
+      // A re-published or re-verified manifest should show up fast anyway.
+      "cache-control": "private, max-age=60",
       "x-trusttab-manifest-version": String(manifest.version),
     },
   });
