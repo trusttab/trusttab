@@ -10,7 +10,14 @@ import { authClient } from "@/lib/auth-client";
 const VERIFICATION_CALLBACK = "/email-verified";
 
 /** Shared email/password form for /login and /signup. */
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm({
+  mode,
+  showForgotPassword = false,
+}: {
+  mode: "login" | "signup";
+  /** Only when this deployment can send email; otherwise the reset flow is off. */
+  showForgotPassword?: boolean;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -112,6 +119,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           />
           {isSignup && <span className="text-xs text-zinc-500">At least 10 characters.</span>}
         </label>
+        {showForgotPassword && (
+          <p className="-mt-2 text-right text-sm">
+            <Link href="/forgot-password" className="text-zinc-600 underline">
+              Forgot password?
+            </Link>
+          </p>
+        )}
         {error && (
           <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

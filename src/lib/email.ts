@@ -11,9 +11,9 @@ import "server-only";
  *              EMAIL_TRANSPORT=console. Prints the email, including the
  *              verification link, to the server log. Never the default in
  *              production.
- * - "disabled" No provider configured in production. Email verification is
- *              turned off (see auth.ts) and a warning is logged, so signups
- *              keep working and the gap is visible rather than silent.
+ * - "disabled" No provider configured in production. Email verification and
+ *              password reset are turned off (see auth.ts) and a warning is
+ *              logged, so signups keep working and the gap is visible.
  */
 
 export type EmailTransport = "resend" | "console" | "disabled";
@@ -28,7 +28,7 @@ export const emailTransport = resolveEmailTransport(process.env);
 
 if (emailTransport === "disabled") {
   console.warn(
-    "[email] No email provider configured (RESEND_API_KEY / EMAIL_FROM). Email verification is DISABLED: new accounts can sign in without verifying their address.",
+    "[email] No email provider configured (RESEND_API_KEY / EMAIL_FROM). Email verification and password reset are DISABLED: new accounts can sign in without verifying their address, and forgotten passwords can't be reset.",
   );
 }
 

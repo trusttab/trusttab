@@ -227,7 +227,7 @@ npm run dev                  # http://localhost:3000
 | `TRUSTTAB_ISSUER_NAME` | Issuer name written into signed manifests |
 | `TRUSTTAB_ISSUER_URL` | Public `https://` base URL of this instance, written into manifests |
 | `TRUSTTAB_SIGNING_PRIVATE_KEY` | Ed25519 signing key. Generate with `npm run keys:generate` and back it up |
-| `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification** (with a startup warning) |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification and password reset email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification and password reset** (with a startup warning) |
 | `AGENTTRUST_VERIFY_TOKEN` | *Optional.* Makes this deployment publish its own verification tag so it can claim its own domain |
 
 ### Deploying to Vercel
@@ -302,7 +302,7 @@ drizzle/                generated SQL migrations
 - [x] Self-attestation for forms rendered by JavaScript (shown as "Self-declared", never "Verified")
 - [x] Rate limiting and IP minimization on public endpoints
 - [x] Sign-in/sign-up rate limiting that holds across serverless instances
-- [x] Email verification for new accounts (needs a Resend key and verified sending domain in production)
+- [x] Email verification for new accounts and password reset (need a Resend key and verified sending domain in production)
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
 - [ ] Scheduled re-verification
 

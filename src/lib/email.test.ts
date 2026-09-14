@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { resolveEmailTransport } from "./email";
-import { verificationEmail } from "./email-templates";
+import { passwordChangedEmail, passwordResetEmail, verificationEmail } from "./email-templates";
 
 describe("resolveEmailTransport", () => {
   test("uses Resend only when both the key and sender are set", () => {
@@ -35,5 +35,26 @@ describe("verificationEmail", () => {
     const email = verificationEmail({ url: 'https://x.test/"><script>', issuerName: "<b>Evil</b>", expiresInMinutes: 60 });
     assert.doesNotMatch(email.html, /<script>|<b>Evil/);
     assert.match(email.html, /&lt;b&gt;Evil&lt;\/b&gt;/);
+  });
+});
+
+describe("password emails", () => {
+  test("reset email carries the link, expiry and single-use note", () => {
+    const url = "https://issuer.test/api/auth/reset-password/tok123?callbackURL=%2Freset-password";
+    const email = passwordResetEmail({ url, issuerName: "TrustTab", expiresInMinutes: 60 });
+    assert.equal(email.subject, "Reset your TrustTab password");
+    assert.ok(email.text.includes(url));
+    assert.ok(email.html.includes(url));
+    assert.match(email.text, /expires in 60 minutes and can be used once/);
+  });
+  test("changed notice tells the owner what to do if it wasn't them", () => {
+    const email = passwordChangedEmail({ issuerName: "TrustTab", loginUrl: "https://issuer.test/login" });
+    assert.match(email.text, /signed out on all devices/);
+    assert.match(email.text, /If it wasn't you/);
+    assert.ok(email.html.includes('href="https://issuer.test/login"'));
+  });
+  test("escapes injected values", () => {
+    const email = passwordChangedEmail({ issuerName: "<img src=x>", loginUrl: 'javascript:"x' });
+    assert.doesNotMatch(email.html, /<img src=x>|href="javascript:"x"/);
   });
 });

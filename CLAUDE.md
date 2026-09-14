@@ -424,6 +424,17 @@ rather than silently changing direction.
   (chosen so production signups keep working until a sending domain exists).
   Accounts that existed before migration `0007` are grandfathered as
   verified.
+- **2026-09-14 — Password reset, same email setup.** Better Auth's
+  built-in flow: `/forgot-password` → emailed single-use link (1 hour) →
+  `/reset-password`. The request gets an identical response whether or not
+  the address has an account. On success, all sessions are revoked, a
+  "password was changed" notice is emailed, and the email is marked verified
+  (clicking a link sent to the address proves control of it). The reset page
+  sends `Referrer-Policy: no-referrer` and strips the token from the address
+  bar. When email is disabled, the "Forgot password?" link is hidden and
+  `/forgot-password` says reset is unavailable, rather than promising an
+  email that never arrives. Requests are rate-limited by Better Auth's
+  built-in rule (3 per 60s per IP).
 
 ## Status at the end of the 5-day build (2026-09-14)
 
@@ -451,7 +462,7 @@ endpoint and a republish; it should then reach `self_declared`.
 - Rate limits trust `x-forwarded-for`, which is correct on Vercel but
   spoofable for self-hosters not behind a proxy. For serious abuse, add a
   platform/WAF rate limit.
-- Email verification is **off in production** until `RESEND_API_KEY` and
+- Email verification and password reset are **off in production** until `RESEND_API_KEY` and
   `EMAIL_FROM` (on a Resend-verified domain) are set. Accounts created
   between the grandfathering migration and that moment are unverified and
   will be asked to verify on their next sign-in.
