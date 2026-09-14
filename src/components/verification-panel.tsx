@@ -36,29 +36,41 @@ export function VerificationPanel({
 
       {run && (
         <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-200">
-          {run.resultsJson.checks.map((check) => (
-            <li key={check.id} className="space-y-2 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusPill tone={check.passed ? "good" : "bad"}>{check.passed ? "Pass" : "Fail"}</StatusPill>
-                <span className="text-sm font-medium">{check.label}</span>
-              </div>
-              <p className="text-sm text-zinc-600">{check.message}</p>
-              {check.details.length > 0 && (
-                <ul className="space-y-1.5 pl-1">
-                  {check.details.map((detail, i) => (
-                    <li key={i} className="text-xs">
-                      <span className={detail.passed ? "text-emerald-700" : "text-red-700"}>
-                        {detail.passed ? "✓" : "✗"}
-                      </span>{" "}
-                      <span className="font-mono break-all">{detail.subject}</span>
-                      <span className="block pl-4 whitespace-pre-line text-zinc-600">{detail.message}</span>
-                      {detail.note && <span className="block pl-4 text-amber-700">{detail.note}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
+          {run.resultsJson.checks.map((check) => {
+            // A check that "failed" only because of self-attested endpoints is shown as such, not as a pass.
+            const onlySelfDeclared =
+              !check.passed && check.details.length > 0 && check.details.every((d) => d.passed || d.selfDeclared);
+            return (
+              <li key={check.id} className="space-y-2 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill tone={check.passed ? "good" : onlySelfDeclared ? "info" : "bad"}>
+                    {check.passed ? "Pass" : onlySelfDeclared ? "Self-declared" : "Fail"}
+                  </StatusPill>
+                  <span className="text-sm font-medium">{check.label}</span>
+                </div>
+                <p className="text-sm text-zinc-600">{check.message}</p>
+                {check.details.length > 0 && (
+                  <ul className="space-y-1.5 pl-1">
+                    {check.details.map((detail, i) => (
+                      <li key={i} className="text-xs">
+                        <span
+                          className={
+                            detail.passed ? "text-emerald-700" : detail.selfDeclared ? "text-blue-700" : "text-red-700"
+                          }
+                          title={detail.selfDeclared ? "Self-declared by the owner, not confirmed" : undefined}
+                        >
+                          {detail.passed ? "✓" : detail.selfDeclared ? "◐" : "✗"}
+                        </span>{" "}
+                        <span className="font-mono break-all">{detail.subject}</span>
+                        <span className="block pl-4 whitespace-pre-line text-zinc-600">{detail.message}</span>
+                        {detail.note && <span className="block pl-4 text-amber-700">{detail.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

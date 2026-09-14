@@ -5,7 +5,13 @@
   "description": "Declares which forms on a site are safe and correctly structured for an AI agent to act on. Served at /.well-known/agent-trust.json, or linked from the homepage <head> with <link rel=\"agent-trust-manifest\" href=\"...\"> on platforms that reserve /.well-known/. Version 1.0 (DRAFT — subject to change until the first stable release).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "issuer", "site", "policy", "endpoints"],
+  "required": [
+    "version",
+    "issuer",
+    "site",
+    "policy",
+    "endpoints"
+  ],
   "properties": {
     "version": {
       "description": "Manifest format version.",
@@ -14,7 +20,11 @@
     "issuer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "url", "verification_id"],
+      "required": [
+        "name",
+        "url",
+        "verification_id"
+      ],
       "properties": {
         "name": {
           "description": "Name of the service that verified and signed this manifest.",
@@ -39,7 +49,13 @@
     "site": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["domain", "verified_at", "expires_at", "signature"],
+      "required": [
+        "domain",
+        "verification_status",
+        "verified_at",
+        "expires_at",
+        "signature"
+      ],
       "properties": {
         "domain": {
           "description": "Hostname this manifest applies to (lowercase, punycode, no leading www.). Must equal the domain the manifest is served from.",
@@ -47,9 +63,20 @@
           "maxLength": 253,
           "pattern": "^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9-]{2,63}$"
         },
+        "verification_status": {
+          "description": "Outcome of the issuer's latest checks. \"verified\": every automated check passed. \"self_declared\": every automated check passed except that one or more forms could not be confirmed automatically and the owner self-attests them (see endpoints[].verified_by). \"unverified\": otherwise, or not yet checked. Only \"verified\" means TrustTab confirmed everything.",
+          "enum": [
+            "verified",
+            "self_declared",
+            "unverified"
+          ]
+        },
         "verified_at": {
-          "description": "When the issuer's verification checks last passed for this manifest, or null if they have not passed yet.",
-          "type": ["string", "null"],
+          "description": "When every automated check last passed (verification_status \"verified\"). Null for any other status, including self_declared.",
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "date-time"
         },
         "expires_at": {
@@ -68,7 +95,11 @@
     "policy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["no_prompt_injection_pledge", "agent_rate_limit", "content_scan"],
+      "required": [
+        "no_prompt_injection_pledge",
+        "agent_rate_limit",
+        "content_scan"
+      ],
       "properties": {
         "no_prompt_injection_pledge": {
           "description": "The site owner pledges that declared pages contain no content intended to manipulate AI agents.",
@@ -77,7 +108,10 @@
         "agent_rate_limit": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["requests_per_minute", "captcha_exempt"],
+          "required": [
+            "requests_per_minute",
+            "captcha_exempt"
+          ],
           "properties": {
             "requests_per_minute": {
               "description": "Maximum requests per minute an agent may make to declared endpoints.",
@@ -94,15 +128,25 @@
         "content_scan": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["last_scanned", "status"],
+          "required": [
+            "last_scanned",
+            "status"
+          ],
           "properties": {
             "last_scanned": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "format": "date-time"
             },
             "status": {
               "description": "Result of the issuer's most recent prompt-injection scan of the declared pages.",
-              "enum": ["pending", "passed", "failed"]
+              "enum": [
+                "pending",
+                "passed",
+                "failed"
+              ]
             }
           }
         }
@@ -112,7 +156,9 @@
       "type": "array",
       "minItems": 1,
       "maxItems": 50,
-      "items": { "$ref": "#/$defs/endpoint" }
+      "items": {
+        "$ref": "#/$defs/endpoint"
+      }
     }
   },
   "$defs": {
@@ -138,7 +184,16 @@
     "endpoint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "method", "purpose", "schema", "agent_safe", "requires_captcha"],
+      "required": [
+        "path",
+        "method",
+        "purpose",
+        "schema",
+        "agent_safe",
+        "requires_captcha",
+        "self_attested",
+        "verified_by"
+      ],
       "properties": {
         "path": {
           "description": "Path of the page containing the form, relative to the site root.",
@@ -148,16 +203,25 @@
         },
         "method": {
           "description": "HTTP method the form submits with.",
-          "enum": ["GET", "POST"]
+          "enum": [
+            "GET",
+            "POST"
+          ]
         },
-        "purpose": { "$ref": "#/$defs/purpose" },
+        "purpose": {
+          "$ref": "#/$defs/purpose"
+        },
         "schema": {
           "description": "Map of form input name attribute to field type expression.",
           "type": "object",
           "minProperties": 1,
           "maxProperties": 100,
-          "propertyNames": { "pattern": "^\\S{1,100}$" },
-          "additionalProperties": { "$ref": "#/$defs/fieldType" }
+          "propertyNames": {
+            "pattern": "^\\S{1,100}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/fieldType"
+          }
         },
         "agent_safe": {
           "description": "Whether the site owner declares this form safe for agents to submit.",
@@ -165,6 +229,18 @@
         },
         "requires_captcha": {
           "type": "boolean"
+        },
+        "self_attested": {
+          "description": "The site owner attests that this form exists as declared, for forms TrustTab cannot inspect automatically (e.g. rendered by client-side JavaScript).",
+          "type": "boolean"
+        },
+        "verified_by": {
+          "description": "Who vouches for this endpoint as of the latest check: \"issuer\" if TrustTab's automated check confirmed the form, \"owner\" if only the owner's self-attestation does, null if neither.",
+          "enum": [
+            "issuer",
+            "owner",
+            null
+          ]
         }
       }
     }

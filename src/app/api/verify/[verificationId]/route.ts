@@ -18,11 +18,14 @@ const publicHeaders = {
  * visitor clicking a badge) can confirm with the issuer that a site's
  * verification is real and current.
  *
- *   200 { verification_id, status, domain, verified_at, expires_at, issuer, manifest_url }
+ *   200 { verification_id, status, domain, verified_at, expires_at, issuer,
+ *         manifest_url, self_declared_endpoints }
  *   404 { status: "not_found" }
  *
- * `status` is one of verified | pending | needs_fix | failed | expired.
- * Only `verified` means the site currently passes every check.
+ * `status` is one of verified | self_declared | pending | needs_fix | failed |
+ * expired. Only `verified` means TrustTab confirmed everything. `self_declared`
+ * means every automated check passed except the forms listed in
+ * `self_declared_endpoints`, which only the site owner vouches for.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/verify/[verificationId]">) {
   const limited = await enforceRateLimit(request, "api", publicHeaders);
@@ -46,6 +49,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/verify/[veri
       expires_at: entry.expiresAt?.toISOString() ?? null,
       issuer: { name: issuer.name, url: issuer.url },
       manifest_url: `${issuer.url}/api/manifest/${entry.domain}`,
+      self_declared_endpoints: entry.selfDeclaredEndpoints,
     },
     { headers: publicHeaders },
   );

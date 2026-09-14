@@ -28,6 +28,7 @@ const input: ManifestInput = {
       schema: { email: "email", message: "string", phone: "phone?", topic: "enum[sales,support]" },
       agent_safe: true,
       requires_captcha: false,
+      self_attested: false,
     },
   ],
 };
@@ -104,6 +105,8 @@ describe("validateManifest (agent-trust.schema.json)", () => {
     const m = makeSigned();
     assert.equal(m.issuer.url, "https://issuer.test");
     assert.equal(m.site.verified_at, null);
+    assert.equal(m.site.verification_status, "unverified");
+    assert.equal(m.endpoints[0].verified_by, null);
     assert.equal(m.site.expires_at, "2026-10-15T00:00:00.000Z");
     assert.deepEqual(m.policy.content_scan, { last_scanned: null, status: "pending" });
   });
@@ -119,6 +122,9 @@ describe("validateManifest (agent-trust.schema.json)", () => {
     ["bad verification id", (m) => (m.issuer.verification_id = "abc")],
     ["no endpoints", (m) => (m.endpoints = [])],
     ["rate limit out of range", (m) => (m.policy.agent_rate_limit.requests_per_minute = 0)],
+    ["unknown verification status", (m) => ((m.site as { verification_status: string }).verification_status = "mostly")],
+    ["unknown verified_by", (m) => ((m.endpoints[0] as { verified_by: string }).verified_by = "someone")],
+    ["missing self_attested", (m) => delete (m.endpoints[0] as Partial<Manifest["endpoints"][0]>).self_attested],
   ];
   for (const [name, mutate] of invalidCases) {
     test(`rejects: ${name}`, () => {

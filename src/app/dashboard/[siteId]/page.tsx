@@ -22,7 +22,11 @@ function toInput(manifest: Manifest): ManifestInput {
   return {
     no_prompt_injection_pledge: manifest.policy.no_prompt_injection_pledge,
     agent_rate_limit: manifest.policy.agent_rate_limit,
-    endpoints: manifest.endpoints,
+    // verified_by is set by TrustTab, not edited by the owner.
+    endpoints: manifest.endpoints.map(({ verified_by: _verifiedBy, ...endpoint }) => {
+      void _verifiedBy;
+      return endpoint;
+    }),
   };
 }
 

@@ -7,6 +7,8 @@ import type { PublicStatus } from "./registry";
 
 const STYLES: Record<PublicStatus | "not_found", { text: string; color: string }> = {
   verified: { text: "verified", color: "#15803d" },
+  // Deliberately not green: TrustTab has not confirmed every form.
+  self_declared: { text: "self-declared", color: "#1d4ed8" },
   pending: { text: "pending", color: "#71717a" },
   needs_fix: { text: "needs fixes", color: "#b45309" },
   failed: { text: "failed", color: "#b91c1c" },

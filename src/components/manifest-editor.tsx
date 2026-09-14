@@ -15,6 +15,7 @@ type EndpointDraft = {
   fieldsText: string;
   agent_safe: boolean;
   requires_captcha: boolean;
+  self_attested: boolean;
 };
 
 type Props = { siteId: string; initial: ManifestInput | null };
@@ -30,13 +31,24 @@ const newEndpoint = (): EndpointDraft => ({
   fieldsText: "name: string\nemail: email\nmessage: string",
   agent_safe: true,
   requires_captcha: false,
+  self_attested: false,
 });
 
 export function ManifestEditor({ siteId, initial }: Props) {
   const router = useRouter();
   const [endpoints, setEndpoints] = useState<EndpointDraft[]>(() =>
     initial
-      ? initial.endpoints.map((e) => ({ key: nextKey++, ...e, fieldsText: fieldsToText(e.schema) }))
+      ? initial.endpoints.map((e) => ({
+          key: nextKey++,
+          path: e.path,
+          method: e.method,
+          purpose: e.purpose,
+          agent_safe: e.agent_safe,
+          requires_captcha: e.requires_captcha,
+          // Manifests published before self-attestation existed lack the field.
+          self_attested: e.self_attested ?? false,
+          fieldsText: fieldsToText(e.schema),
+        }))
       : [newEndpoint()],
   );
   const [rpm, setRpm] = useState(initial?.agent_rate_limit.requests_per_minute ?? 30);
@@ -186,6 +198,21 @@ export function ManifestEditor({ siteId, initial }: Props) {
               Requires CAPTCHA
             </label>
           </div>
+          <label className="flex items-start gap-2 rounded-md bg-blue-50 p-2 text-xs text-blue-900">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={e.self_attested}
+              onChange={(ev) => update(e.key, { self_attested: ev.target.checked })}
+            />
+            <span>
+              <span className="font-medium">Self-attest this form.</span> Use only if TrustTab can&apos;t see the form
+              because it&apos;s rendered by JavaScript. I declare it exists at this path with these fields. If the
+              automated check can&apos;t confirm it, this endpoint is shown publicly as{" "}
+              <span className="font-medium">self-declared, not verified</span>, and the site can reach
+              &quot;Self-declared&quot; status at most.
+            </span>
+          </label>
         </fieldset>
       ))}
 

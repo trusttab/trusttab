@@ -116,6 +116,9 @@ export const siteStatus = pgEnum("site_status", [
   "verified",
   "needs_fix",
   "failed",
+  // Automated checks passed except forms the owner self-attests. Distinct
+  // from "verified" everywhere it is shown.
+  "self_declared",
 ]);
 
 export const sites = pgTable(
@@ -244,6 +247,7 @@ export const manifestEndpoints = pgTable(
     schemaJson: jsonb("schema_json").$type<Record<string, string>>().notNull(),
     agentSafe: boolean("agent_safe").notNull(),
     requiresCaptcha: boolean("requires_captcha").notNull(),
+    selfAttested: boolean("self_attested").notNull().default(false),
   },
   (t) => [index("manifest_endpoints_manifest_id_idx").on(t.manifestId)],
 );

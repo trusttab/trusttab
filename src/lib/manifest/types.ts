@@ -29,12 +29,25 @@ export type ManifestEndpoint = {
   schema: Record<string, string>;
   agent_safe: boolean;
   requires_captcha: boolean;
+  /** Owner attests the form exists as declared (for forms TrustTab can't inspect, e.g. JS-rendered). */
+  self_attested: boolean;
+  /** Set by TrustTab after each check: "issuer" = confirmed automatically, "owner" = self-attested only. */
+  verified_by: "issuer" | "owner" | null;
 };
+
+export type VerificationStatus = "verified" | "self_declared" | "unverified";
 
 export type Manifest = {
   version: "1.0";
   issuer: { name: string; url: string; verification_id: string };
-  site: { domain: string; verified_at: string | null; expires_at: string; signature: string };
+  site: {
+    domain: string;
+    verification_status: VerificationStatus;
+    /** Set only when verification_status is "verified". */
+    verified_at: string | null;
+    expires_at: string;
+    signature: string;
+  };
   policy: {
     no_prompt_injection_pledge: true;
     agent_rate_limit: { requests_per_minute: number; captcha_exempt: boolean };
@@ -49,5 +62,5 @@ export type UnsignedManifest = Omit<Manifest, "site"> & { site: Omit<Manifest["s
 export type ManifestInput = {
   agent_rate_limit: Manifest["policy"]["agent_rate_limit"];
   no_prompt_injection_pledge: boolean;
-  endpoints: ManifestEndpoint[];
+  endpoints: Omit<ManifestEndpoint, "verified_by">[];
 };

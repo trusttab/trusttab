@@ -46,13 +46,13 @@ authorized to act for someone. TrustTab is complementary: it verifies the
    method, purpose (from a fixed, centrally maintained list such as
    `lead_inquiry` or `booking`) and field schema. TrustTab signs the manifest
    and serves it. Point your site at it with a `/.well-known/agent-trust.json`
-   redirect or a `<link rel="agent-trust-manifest">` tag (see [Discovery](#discovery)).
+   redirect or an `agent-trust-manifest` tag on your homepage (see [Discovery](#discovery)).
 
 3. **Get checked.** TrustTab confirms each declared form exists with the
    declared fields, scans the page for hidden prompt-injection content,
    checks HTTPS, and makes sure the manifest's domain matches the domain
-   serving it. Click **Re-check now** to run the checks; passing sites are
-   marked verified and their manifest is re-signed with `verified_at`.
+   serving it. Click **Re-check now** to run the checks. The manifest is
+   re-signed after every run to reflect the result.
 
    | Check | Passes when |
    | --- | --- |
@@ -62,6 +62,23 @@ authorized to act for someone. TrustTab is complementary: it verifies the
    | Domain match | The discovered manifest is signed for *this* domain and registration |
    | Expiry | That served manifest hasn't expired |
 
+   **Forms rendered by JavaScript.** TrustTab reads server-rendered HTML, so it
+   can't see forms that only appear after client-side JavaScript runs. For
+   those, an owner can **self-attest** the endpoint. If every other check
+   passes, the site gets the separate **Self-declared** status, never
+   "Verified". The manifest marks each endpoint's `verified_by` as `issuer`
+   (confirmed) or `owner` (self-attested only). Self-attestation never covers a
+   page that fails to load or any check other than the form match.
+
+   | Status | Meaning | Badge |
+   | --- | --- | --- |
+   | Verified | Every automated check passed | ![verified](docs/badges/verified.svg) |
+   | Self-declared | Everything passed except forms the owner self-attests | ![self-declared](docs/badges/self-declared.svg) |
+   | Needs fixes | Some checks failed | ![needs fixes](docs/badges/needs-fix.svg) |
+   | Failed | Content that could manipulate AI agents was found | ![failed](docs/badges/failed.svg) |
+   | Expired | Was verified or self-declared, but not re-checked in time | ![expired](docs/badges/expired.svg) |
+   | Pending | Not checked yet | ![pending](docs/badges/pending.svg) |
+
 4. **Show the badge.** Embed the snippet from your dashboard. It displays your
    live status and links to a public verification page on the issuer.
 
@@ -70,12 +87,18 @@ authorized to act for someone. TrustTab is complementary: it verifies the
 | Endpoint | Returns |
 | --- | --- |
 | `GET /api/manifest/:domain` | The live signed manifest for a domain |
-| `GET /api/verify/:verificationId` | `{ verification_id, status, domain, verified_at, expires_at, issuer, manifest_url }`. `status` is `verified`, `pending`, `needs_fix`, `failed` or `expired` |
+| `GET /api/verify/:verificationId` | `{ verification_id, status, domain, verified_at, expires_at, issuer, manifest_url, self_declared_endpoints }`. `status` is `verified`, `self_declared`, `pending`, `needs_fix`, `failed` or `expired` |
 | `GET /api/badge/:verificationId.svg` | Live status badge |
 | `GET /.well-known/jwks.json` | The issuer's public signing keys |
 
-All public endpoints send `Access-Control-Allow-Origin: *`. Requests to the
-manifest and verify endpoints appear in the site owner's traffic log.
+All public endpoints send `Access-Control-Allow-Origin: *` and are rate-limited
+per client IP (120 requests/minute for the manifest and verify endpoints, 300
+for badges). Requests to the manifest and verify endpoints appear in the site
+owner's traffic log.
+
+**Privacy:** the traffic log stores only a truncated client IP (IPv4 /24, IPv6
+/48) and a user agent, and rows are deleted after 30 days. The rate limiter
+keys on a keyed hash of the IP and keeps no raw addresses.
 
 ## The manifest
 
@@ -88,6 +111,7 @@ The manifest format is defined by [`agent-trust.schema.json`](./agent-trust.sche
   "issuer": { "name": "TrustTab", "url": "https://trusttab.example", "verification_id": "tt_3v5urc2st37r" },
   "site": {
     "domain": "acme-plumbing.com",
+    "verification_status": "unverified",
     "verified_at": null,
     "expires_at": "2026-10-14T18:00:00.000Z",
     "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6Ii4uLiJ9..3q2-7w..."
@@ -104,16 +128,20 @@ The manifest format is defined by [`agent-trust.schema.json`](./agent-trust.sche
       "purpose": "lead_inquiry",
       "schema": { "name": "string", "email": "email", "service": "enum[repair,install]", "notes": "string?" },
       "agent_safe": true,
-      "requires_captcha": false
+      "requires_captcha": false,
+      "self_attested": false,
+      "verified_by": null
     }
   ]
 }
 ```
 
-`verified_at: null` and `content_scan.status: "pending"` mean the manifest is
-signed but the verification checks haven't passed yet. **Agents should only
-treat a manifest as verified when `verified_at` is set and `expires_at` is in
-the future.**
+`verification_status: "unverified"` and `content_scan.status: "pending"` mean
+the manifest is signed but hasn't been checked yet. **Agents should treat a
+manifest as verified only when `verification_status` is `"verified"` (which is
+the only case where `verified_at` is set) and `expires_at` is in the future.**
+`"self_declared"` means TrustTab could not confirm every form: rely only on
+endpoints whose `verified_by` is `"issuer"`.
 
 A site's live manifest is served at `<issuer>/api/manifest/<domain>`.
 
@@ -123,10 +151,12 @@ Agents find a site's manifest in one of two places, checked in this order:
 
 1. **`https://<domain>/.well-known/agent-trust.json`**, typically a redirect to
    the issuer URL above.
-2. **A link in the homepage `<head>`**, for platforms that reserve
-   `/.well-known/` (many hosted site builders do):
+2. **A tag in the homepage `<head>`**, for platforms that reserve
+   `/.well-known/` (many hosted site builders do). Either form works; some
+   builders keep custom `<meta>` tags but strip custom `<link>` tags:
 
    ```html
+   <meta name="agent-trust-manifest" content="https://<issuer>/api/manifest/<domain>">
    <link rel="agent-trust-manifest" href="https://<issuer>/api/manifest/<domain>">
    ```
 
@@ -257,8 +287,11 @@ drizzle/                generated SQL migrations
 - [x] Manifest generator: declare endpoints, validate against the schema, sign, serve at `/api/manifest/[domain]`
 - [x] Verification engine: endpoint/field match, prompt-injection scan, HTTPS, domain match, expiry
 - [x] Public verify endpoint, badge SVG, request log
-- [x] `<link rel="agent-trust-manifest">` discovery for platforms that reserve `/.well-known/`
-- [ ] Detect forms rendered by client-side JavaScript
+- [x] `agent-trust-manifest` homepage tag discovery for platforms that reserve `/.well-known/`
+- [x] Self-attestation for forms rendered by JavaScript (shown as "Self-declared", never "Verified")
+- [x] Rate limiting and IP minimization on public endpoints
+- [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
+- [ ] Rate limiting for sign-in/sign-up that holds across serverless instances
 - [ ] Scheduled re-verification
 
 ## Contributing

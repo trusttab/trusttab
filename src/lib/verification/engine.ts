@@ -9,6 +9,7 @@ import { fetchSitePage, isSameSite } from "@/lib/site-fetch";
 import { matchForm } from "./form-match";
 import { scanForInjection } from "./injection-scan";
 import { findManifestLink, MANIFEST_LINK_REL } from "./manifest-link";
+import { summarizeOutcome, type OutcomeSummary } from "./outcome";
 import { evaluateServedManifest } from "./served-manifest";
 import type { CheckDetail, CheckResult, VerificationResults } from "./types";
 
@@ -17,7 +18,9 @@ const FETCH_CONCURRENCY = 4;
 
 export type VerificationOutcome = {
   results: VerificationResults;
+  /** True only when every automated check passed. */
   passed: boolean;
+  summary: OutcomeSummary;
   /** True when the injection scan found manipulative content (not merely failed to scan). */
   injectionDetected: boolean;
 };
@@ -55,6 +58,7 @@ export async function runVerification(args: {
   return {
     results: { checks },
     passed: checks.every((c) => c.passed),
+    summary: summarizeOutcome(checks),
     injectionDetected: detected,
   };
 }
@@ -67,15 +71,31 @@ function checkEndpoints(manifest: Manifest, pages: Map<string, { url: string; re
     if (result.status >= 400) return { subject, passed: false, message: `${url} returned HTTP ${result.status}.` };
 
     const match = matchForm(result.body, Object.keys(endpoint.schema), endpoint.method);
-    return { subject, passed: match.passed, message: match.message, note: match.note };
+    if (match.passed || !endpoint.self_attested) {
+      return { subject, passed: match.passed, message: match.message, note: match.note };
+    }
+    // Self-attestation covers only a form the scanner couldn't see on a page
+    // that loaded fine (typically rendered by JavaScript). It never covers a
+    // missing page, which is handled above.
+    return {
+      subject,
+      passed: false,
+      selfDeclared: true,
+      message: `Not confirmed automatically: ${match.message} The owner self-attests that this form exists as declared.`,
+    };
   });
 
-  const failed = details.filter((d) => !d.passed).length;
+  const failed = details.filter((d) => !d.passed && !d.selfDeclared).length;
+  const selfDeclared = details.filter((d) => d.selfDeclared).length;
+  const confirmed = details.length - failed - selfDeclared;
   return {
     id: "endpoint_match",
     label: "Declared forms exist with the declared fields",
-    passed: failed === 0,
-    message: failed === 0 ? `All ${details.length} endpoints matched.` : `${failed} of ${details.length} endpoints did not match.`,
+    passed: failed === 0 && selfDeclared === 0,
+    message:
+      `${confirmed} of ${details.length} endpoint(s) confirmed automatically` +
+      (selfDeclared ? `, ${selfDeclared} self-declared by the owner (not confirmed)` : "") +
+      (failed ? `, ${failed} did not match.` : "."),
     details,
   };
 }

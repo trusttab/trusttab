@@ -365,6 +365,28 @@ rather than silently changing direction.
   are not logged (they would be every page view of the embedding site).
   TrustTab's own verification fetches are counted. Full client IPs are stored
   as the spec says; see open questions.
+- **2026-09-14 — `<meta name="agent-trust-manifest">` accepted too.** On
+  leasetab.com (Base44) the ownership `<meta>` tag survived but the `<link>`
+  tag never appeared in served HTML, so builders evidently differ in which
+  custom head tags they keep. Both forms, same rules; `<link>` wins if both
+  are present. The dashboard suggests the meta form.
+- **2026-09-14 — Self-attestation for JS-rendered forms (no headless
+  browser).** Owners may self-attest an endpoint. It only covers a form the
+  scanner can't see on a page that loaded (2xx). It never covers a missing
+  page or any other check. If all other checks pass and every endpoint is
+  confirmed or self-attested, the site status is `self_declared`: a separate
+  state, never shown as verified. It gets a blue badge, "Self-declared"
+  labels, and the public page lists the unconfirmed forms. In the signed
+  manifest: `site.verification_status` (`verified | self_declared |
+  unverified`), per-endpoint `self_attested` and `verified_by` (`issuer |
+  owner | null`). `site.verified_at` is set only for `verified`, so agents
+  that check it are never misled.
+- **2026-09-14 — Public endpoint rate limits and IP minimization.** Fixed
+  window per client IP in Postgres (`rate_limit_buckets`, keyed by HMAC of
+  the IP): 120/min for manifest + verify, 300/min for badges. Traffic-log IPs
+  are truncated before storage (IPv4 /24, IPv6 /48) and rows are pruned after
+  30 days. Pruning piggybacks on writes, so no cron is needed. Existing rows
+  were anonymized by a data migration.
 
 ## Open questions
 
@@ -379,9 +401,14 @@ rather than silently changing direction.
 - JS-rendered forms: confirmed on leasetab.com (Base44). Options: a hosted
   headless-render step, or an owner-declared flag with a clearly weaker check.
   Needs a product decision.
-- `manifest_hits` stores full IPs with no retention limit and no rate limit
-  on the public endpoints. Consider truncating IPs and pruning old rows
-  before real traffic arrives.
+- Better Auth's sign-in/sign-up rate limit is in-memory (per serverless
+  instance). Switch it to database storage before real traffic.
+- Rate limits trust `x-forwarded-for`, which is correct on Vercel but
+  spoofable for self-hosters not behind a proxy. For serious abuse, add a
+  platform/WAF rate limit.
+- Manifests published before the self-attestation fields existed are served
+  as-is until their next re-check, and they don't validate against the
+  current schema. Only leasetab.com's is affected.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

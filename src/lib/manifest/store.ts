@@ -41,6 +41,7 @@ export async function insertManifestVersion(tx: Tx, siteId: string, manifest: Ma
       schemaJson: e.schema,
       agentSafe: e.agent_safe,
       requiresCaptcha: e.requires_captcha,
+      selfAttested: e.self_attested,
     })),
   );
   return row;

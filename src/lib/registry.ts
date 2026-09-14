@@ -11,10 +11,11 @@ import { getLatestManifest, isManifestExpired } from "./manifest/queries";
  * Public registry status for a site, as reported by /api/verify, the badge
  * and the public verification page.
  *
- * `expired` is derived, not stored: a site whose last run passed but whose
- * current manifest has passed `expires_at` is no longer vouched for.
+ * `expired` is derived, not stored: a site whose last run passed (verified or
+ * self-declared) but whose current manifest has passed `expires_at` is no
+ * longer vouched for.
  */
-export type PublicStatus = "verified" | "pending" | "needs_fix" | "failed" | "expired";
+export type PublicStatus = "verified" | "self_declared" | "pending" | "needs_fix" | "failed" | "expired";
 
 export type RegistryEntry = {
   siteId: string;
@@ -23,6 +24,8 @@ export type RegistryEntry = {
   status: PublicStatus;
   verifiedAt: Date | null;
   expiresAt: Date | null;
+  /** Endpoints vouched for only by the owner's self-attestation, not by TrustTab. */
+  selfDeclaredEndpoints: { method: string; path: string; purpose: string }[];
 };
 
 const VERIFICATION_ID_RE = /^tt_[a-z0-9]{8,32}$/;
@@ -42,8 +45,11 @@ export async function lookupRegistryEntry(verificationId: string, now = new Date
     siteId: site.id,
     verificationId,
     domain: site.domain,
-    status: site.status === "verified" && expired ? "expired" : site.status,
+    status: (site.status === "verified" || site.status === "self_declared") && expired ? "expired" : site.status,
     verifiedAt: manifest?.verifiedAt ?? null,
     expiresAt: manifest?.expiresAt ?? null,
+    selfDeclaredEndpoints: (manifest?.payloadJson.endpoints ?? [])
+      .filter((e) => e.verified_by === "owner")
+      .map(({ method, path, purpose }) => ({ method, path, purpose })),
   };
 }

@@ -43,6 +43,13 @@
       "when": 1789422934771,
       "tag": "0005_anonymize_existing_hit_ips",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789423197154,
+      "tag": "0006_self_attestation",
+      "breakpoints": true
     }
   ]
 }

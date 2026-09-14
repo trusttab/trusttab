@@ -8,6 +8,11 @@ export type CheckDetail = {
   passed: boolean;
   message: string;
   note?: string;
+  /**
+   * Endpoint match only: the automated check could not confirm this form, but
+   * the owner self-attests it. The detail still counts as not passed.
+   */
+  selfDeclared?: boolean;
 };
 
 export type CheckResult = {

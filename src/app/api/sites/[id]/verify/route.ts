@@ -22,9 +22,11 @@ const COOLDOWN_MS = 20_000;
  *
  * Runs every verification check against the live site, records a
  * verification_runs row, and updates `sites.status`:
- *   - verified  — every check passed
- *   - failed    — the injection scan found manipulative content
- *   - needs_fix — anything else failed (missing fields, manifest not served…)
+ *   - verified      — every automated check passed
+ *   - self_declared — everything passed except forms the owner self-attests
+ *                     (never shown as "verified" anywhere)
+ *   - failed        — the injection scan found manipulative content
+ *   - needs_fix     — anything else failed (missing fields, manifest not served…)
  *
  * The site's manifest is then re-issued as a new signed version reflecting
  * the outcome (`site.verified_at`, `content_scan`, fresh expiry), so the
@@ -67,7 +69,8 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/sites/[id]
   const scanCheck = outcome.results.checks.find((c) => c.id === "injection_scan")!;
   const reissued = signManifest(
     reissueManifest(latest.payloadJson, {
-      verified: outcome.passed,
+      status: outcome.summary.status,
+      endpointVerifiedBy: outcome.summary.endpointVerifiedBy,
       scanStatus: outcome.injectionDetected ? "failed" : scanCheck.passed ? "passed" : "pending",
     }),
   );
@@ -77,7 +80,12 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/sites/[id]
     return NextResponse.json({ error: "Re-issued manifest failed validation.", details: invalid }, { status: 500 });
   }
 
-  const status = outcome.passed ? "verified" : outcome.injectionDetected ? "failed" : "needs_fix";
+  const status =
+    outcome.summary.status === "verified" || outcome.summary.status === "self_declared"
+      ? outcome.summary.status
+      : outcome.injectionDetected
+        ? "failed"
+        : "needs_fix";
 
   try {
     const run = await db.transaction(async (tx) => {

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="157" height="20" role="img" aria-label="TrustTab: self-declared">
+  <title>TrustTab: self-declared</title>
+  <clipPath id="r"><rect width="157" height="20" rx="3"/></clipPath>
+  <g clip-path="url(#r)">
+    <rect width="62" height="20" fill="#27272a"/>
+    <rect x="62" width="95" height="20" fill="#1d4ed8"/>
+  </g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="31" y="14">TrustTab</text>
+    <text x="109.5" y="14">self-declared</text>
+  </g>
+</svg>

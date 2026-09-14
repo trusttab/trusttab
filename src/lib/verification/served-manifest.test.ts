@@ -26,7 +26,7 @@ const signedFor = (domain: string, verificationId = "tt_aaaaaaaa2222") =>
         no_prompt_injection_pledge: true,
         agent_rate_limit: { requests_per_minute: 10, captcha_exempt: false },
         endpoints: [
-          { path: "/contact", method: "POST", purpose: "lead_inquiry", schema: { email: "email" }, agent_safe: true, requires_captcha: false },
+          { path: "/contact", method: "POST", purpose: "lead_inquiry", schema: { email: "email" }, agent_safe: true, requires_captcha: false, self_attested: false },
         ],
       },
     }),
@@ -75,17 +75,45 @@ describe("evaluateServedManifest", () => {
 describe("reissueManifest", () => {
   test("verified re-issue is schema-valid, signed and marks the scan passed", () => {
     const later = new Date("2026-09-20T00:00:00Z");
-    const m = signManifest(reissueManifest(signedFor("acme.com"), { verified: true, scanStatus: "passed", now: later }));
+    const m = signManifest(
+      reissueManifest(signedFor("acme.com"), { status: "verified", endpointVerifiedBy: ["issuer"], scanStatus: "passed", now: later }),
+    );
     assert.deepEqual(validateManifest(m), []);
     assert.equal(m.site.verified_at, later.toISOString());
+    assert.equal(m.site.verification_status, "verified");
+    assert.equal(m.endpoints[0].verified_by, "issuer");
     assert.equal(m.site.expires_at, "2026-10-20T00:00:00.000Z");
     assert.deepEqual(m.policy.content_scan, { last_scanned: later.toISOString(), status: "passed" });
     assert.equal(evaluate(JSON.stringify(m), later).domainMatch.passed, true);
   });
 
+  test("self-declared re-issue never sets verified_at", () => {
+    const m = signManifest(
+      reissueManifest(signedFor("acme.com"), { status: "self_declared", endpointVerifiedBy: ["owner"], scanStatus: "passed" }),
+    );
+    assert.deepEqual(validateManifest(m), []);
+    assert.equal(m.site.verified_at, null);
+    assert.equal(m.site.verification_status, "self_declared");
+    assert.equal(m.endpoints[0].verified_by, "owner");
+  });
+
+  test("re-issuing a manifest signed before self-attestation existed yields a valid manifest", () => {
+    const legacy = signedFor("acme.com") as unknown as { endpoints: Record<string, unknown>[]; site: Record<string, unknown> };
+    delete legacy.endpoints[0].self_attested;
+    delete legacy.endpoints[0].verified_by;
+    delete legacy.site.verification_status;
+    const m = signManifest(
+      reissueManifest(legacy as never, { status: "unverified", endpointVerifiedBy: [null], scanStatus: "pending" }),
+    );
+    assert.deepEqual(validateManifest(m), []);
+    assert.equal(m.endpoints[0].self_attested, false);
+  });
+
   test("failed re-issue clears verified_at", () => {
-    const verified = signManifest(reissueManifest(signedFor("acme.com"), { verified: true, scanStatus: "passed" }));
-    const failed = reissueManifest(verified, { verified: false, scanStatus: "failed" });
+    const verified = signManifest(
+      reissueManifest(signedFor("acme.com"), { status: "verified", endpointVerifiedBy: ["issuer"], scanStatus: "passed" }),
+    );
+    const failed = reissueManifest(verified, { status: "unverified", endpointVerifiedBy: [null], scanStatus: "failed" });
     assert.equal(failed.site.verified_at, null);
     assert.equal(failed.policy.content_scan.status, "failed");
     assert.equal("signature" in failed.site, false);
