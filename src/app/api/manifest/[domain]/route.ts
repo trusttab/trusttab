@@ -1,6 +1,7 @@
 import { normalizeDomain } from "@/lib/domain";
 import { recordHit } from "@/lib/hits";
 import { getLiveManifestForDomain } from "@/lib/manifest/queries";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 const publicHeaders = {
   // Agents may fetch this from browsers on any origin.
@@ -17,6 +18,9 @@ const publicHeaders = {
  * document, and consumers must check it themselves.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/manifest/[domain]">) {
+  const limited = await enforceRateLimit(request, "api", publicHeaders);
+  if (limited) return limited;
+
   const { domain: rawDomain } = await ctx.params;
   const normalized = normalizeDomain(decodeURIComponent(rawDomain));
   if (!normalized.ok) {

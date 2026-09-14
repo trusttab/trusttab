@@ -1,5 +1,6 @@
 import { renderBadge } from "@/lib/badge";
 import { getIssuer } from "@/lib/manifest/build";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { lookupRegistryEntry } from "@/lib/registry";
 
 /**
@@ -10,7 +11,10 @@ import { lookupRegistryEntry } from "@/lib/registry";
  * Badge loads are not written to the traffic log: they happen on every page
  * view of the embedding site and would drown out agent traffic.
  */
-export async function GET(_request: Request, ctx: RouteContext<"/api/badge/[file]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/badge/[file]">) {
+  const limited = await enforceRateLimit(request, "badge", { "access-control-allow-origin": "*" });
+  if (limited) return limited;
+
   const { file } = await ctx.params;
   const match = /^(tt_[a-z0-9]{8,32})\.svg$/.exec(file);
   const entry = match ? await lookupRegistryEntry(match[1]) : null;

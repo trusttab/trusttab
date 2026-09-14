@@ -29,6 +29,20 @@
       "when": 1789420801232,
       "tag": "0003_manifest_hits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789422932478,
+      "tag": "0004_rate_limit_buckets",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789422934771,
+      "tag": "0005_anonymize_existing_hit_ips",
+      "breakpoints": true
     }
   ]
 }

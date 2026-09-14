@@ -1,5 +1,6 @@
 import { getIssuer } from "@/lib/manifest/build";
 import { recordHit } from "@/lib/hits";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { lookupRegistryEntry } from "@/lib/registry";
 
 const publicHeaders = {
@@ -24,6 +25,9 @@ const publicHeaders = {
  * Only `verified` means the site currently passes every check.
  */
 export async function GET(request: Request, ctx: RouteContext<"/api/verify/[verificationId]">) {
+  const limited = await enforceRateLimit(request, "api", publicHeaders);
+  if (limited) return limited;
+
   const { verificationId } = await ctx.params;
   const entry = await lookupRegistryEntry(verificationId);
   if (!entry) {

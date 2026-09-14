@@ -209,12 +209,21 @@ export const manifestHits = pgTable(
       .references(() => sites.id, { onDelete: "cascade" }),
     /** Which public endpoint was hit: "manifest" or "verify". */
     endpoint: text("endpoint").$type<"manifest" | "verify">().notNull(),
+    /** Coarsened client IP (IPv4 /24, IPv6 /48); never the full address. */
     requesterIp: text("requester_ip"),
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
 );
+
+/** Fixed-window request counters for public-endpoint rate limiting (see src/lib/rate-limit.ts). */
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  /** `<bucket>:<HMAC of client IP>` */
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+});
 
 /**
  * Denormalized copy of each manifest's endpoints, so the verification engine
