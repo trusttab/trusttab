@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Day-1 styling is intentionally minimal: light theme only, Tailwind defaults.
+ * Visual polish is scheduled for Day 4.
+ */
+body {
+  @apply bg-zinc-50 text-zinc-900;
+}
