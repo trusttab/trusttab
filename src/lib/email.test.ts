@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import { resolveEmailTransport } from "./email";
-import { passwordChangedEmail, passwordResetEmail, verificationEmail } from "./email-templates";
+import { accountDeletedEmail, passwordChangedEmail, passwordResetEmail, verificationEmail } from "./email-templates";
 
 describe("resolveEmailTransport", () => {
   test("uses Resend only when both the key and sender are set", () => {
@@ -61,4 +61,11 @@ describe("password emails", () => {
     const email = passwordChangedEmail({ issuerName: "<img src=x>", loginUrl: 'javascript:"x', via: "change" });
     assert.doesNotMatch(email.html, /<img src=x>|href="javascript:"x"/);
   });
+});
+
+test("account deleted notice explains consequences and what to do if it wasn't them", () => {
+  const email = accountDeletedEmail({ issuerName: "TrustTab" });
+  assert.equal(email.subject, "Your TrustTab account was deleted");
+  assert.match(email.text, /can't be undone/);
+  assert.match(email.text, /If you didn't do this/);
 });

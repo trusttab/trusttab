@@ -1,7 +1,7 @@
 import "server-only";
 
 import { betterAuth } from "better-auth";
-import { createAuthMiddleware, isAPIError } from "better-auth/api";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { headers } from "next/headers";
@@ -13,7 +13,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { emailTransport, sendEmail, type Email } from "@/lib/email";
-import { passwordChangedEmail, passwordResetEmail, verificationEmail } from "@/lib/email-templates";
+import {
+  accountDeletedEmail,
+  passwordChangedEmail,
+  passwordResetEmail,
+  verificationEmail,
+} from "@/lib/email-templates";
 import { authRateLimitStorage } from "@/lib/rate-limit";
 
 /**
@@ -70,7 +75,11 @@ export const auth = betterAuth({
     ...(emailEnabled && {
       resetPasswordTokenExpiresIn: RESET_LINK_TTL_SECONDS,
       sendResetPassword: async ({ user, url }) => {
-        const content = passwordResetEmail({ url, issuerName: issuerName(), expiresInMinutes: RESET_LINK_TTL_SECONDS / 60 });
+        const content = passwordResetEmail({
+          url,
+          issuerName: issuerName(),
+          expiresInMinutes: RESET_LINK_TTL_SECONDS / 60,
+        });
         sendInBackground({ to: user.email, ...content }, "password reset");
       },
     }),
@@ -93,11 +102,41 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: VERIFICATION_LINK_TTL_SECONDS,
     sendVerificationEmail: async ({ user, url }) => {
-      const content = verificationEmail({ url, issuerName: issuerName(), expiresInMinutes: VERIFICATION_LINK_TTL_SECONDS / 60 });
+      const content = verificationEmail({
+        url,
+        issuerName: issuerName(),
+        expiresInMinutes: VERIFICATION_LINK_TTL_SECONDS / 60,
+      });
       sendInBackground({ to: user.email, ...content }, "verification");
     },
   },
+  user: {
+    deleteUser: {
+      // Deleting a user cascades in the database to their sites, manifests,
+      // verification runs and traffic log (see src/db/schema.ts), so their
+      // public manifests, registry entries and badges stop resolving.
+      enabled: true,
+      afterDelete: async (user) => {
+        if (!emailEnabled) return;
+        sendInBackground({ to: user.email, ...accountDeletedEmail({ issuerName: issuerName() }) }, "account deleted");
+      },
+    },
+  },
   hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Better Auth would otherwise delete an account with no password if the
+      // session is under a day old, letting a stolen session cookie erase the
+      // account. Always require the password (verified by the endpoint).
+      if (ctx.path === "/delete-user") {
+        const password = (ctx.body as { password?: unknown } | undefined)?.password;
+        if (typeof password !== "string" || password.length === 0) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Enter your password to delete your account.",
+            code: "PASSWORD_REQUIRED",
+          });
+        }
+      }
+    }),
     after: createAuthMiddleware(async (ctx) => {
       // Signed-in password change (/dashboard/account). The client always asks
       // to revoke other sessions; here we send the same "password changed"
@@ -113,6 +152,8 @@ export const auth = betterAuth({
     // serverless instances. Keys are hashed; no raw IPs are stored. Enabled in
     // production only (Better Auth's default).
     customStorage: authRateLimitStorage,
+    // Deleting an account checks a password, so limit guesses like sign-in.
+    customRules: { "/delete-user": { window: 10, max: 3 } },
   },
   // Must be the last plugin: lets server actions / route handlers set cookies.
   plugins: [nextCookies()],

@@ -303,7 +303,7 @@ drizzle/                generated SQL migrations
 - [x] Rate limiting and IP minimization on public endpoints
 - [x] Sign-in/sign-up rate limiting that holds across serverless instances
 - [x] Email verification for new accounts and password reset (need a Resend key and verified sending domain in production)
-- [x] Change password for signed-in users (`/dashboard/account`)
+- [x] Change password and delete account for signed-in users (`/dashboard/account`)
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
 - [ ] Scheduled re-verification
 

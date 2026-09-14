@@ -54,14 +54,15 @@ export function passwordResetEmail(args: { url: string; issuerName: string; expi
  */
 export function passwordChangedEmail(args: { issuerName: string; loginUrl: string; via: "reset" | "change" }) {
   const { issuerName, loginUrl, via } = args;
-  const signedOut = via === "reset" ? "you've been signed out on all devices" : "all your other devices have been signed out";
+  const signedOut =
+    via === "reset" ? "you've been signed out on all devices" : "all your other devices have been signed out";
   const subject = `Your ${issuerName} password was changed`;
   const text = [
     `The password for your ${issuerName} account was just changed, and ${signedOut}.`,
     "",
     `If this was you, no action is needed: ${loginUrl}`,
     "",
-    "If it wasn't you, someone may have access to your email account. Secure your email, then use \"Forgot password?\" on the login page to set a new password.",
+    'If it wasn\'t you, someone may have access to your email account. Secure your email, then use "Forgot password?" on the login page to set a new password.',
   ].join("\n");
 
   const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#18181b">
@@ -70,5 +71,21 @@ export function passwordChangedEmail(args: { issuerName: string; loginUrl: strin
   <p>If it wasn't you, someone may have access to your email account. Secure your email, then use <strong>Forgot password?</strong> on the <a href="${escapeHtml(loginUrl)}">login page</a> to set a new password.</p>
 </div>`;
 
+  return { subject, text, html };
+}
+
+/** Sent after an account is deleted, so an owner learns if someone else did it. */
+export function accountDeletedEmail(args: { issuerName: string }) {
+  const { issuerName } = args;
+  const subject = `Your ${issuerName} account was deleted`;
+  const text = [
+    `Your ${issuerName} account and all of its sites, manifests and verification history were just deleted. Badges and public verification pages for those sites no longer resolve.`,
+    "",
+    "This can't be undone. If you didn't do this, someone had your password: change it anywhere you reused it, and secure your email account.",
+  ].join("\n");
+  const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5;color:#18181b">
+  <p>Your ${escapeHtml(issuerName)} account and all of its sites, manifests and verification history were just deleted. Badges and public verification pages for those sites no longer resolve.</p>
+  <p>This can't be undone. If you didn't do this, someone had your password: change it anywhere you reused it, and secure your email account.</p>
+</div>`;
   return { subject, text, html };
 }

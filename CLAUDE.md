@@ -443,6 +443,18 @@ rather than silently changing direction.
   `hooks.after` middleware emails the same "password changed" notice (worded
   for other devices) only when the change succeeded, and only if email is
   enabled. The header links to Account.
+- **2026-09-14 — Delete account at `/dashboard/account`.** Better Auth
+  `user.deleteUser`. Deletion cascades in the database to sites, manifests,
+  endpoints, verification runs and traffic log. Public manifests, registry
+  lookups and verification pages then 404, badges show "not found", and
+  verified domains become claimable by other accounts. The UI lists those
+  consequences (naming the user's domains) and requires typing the account
+  email plus the password. Server-side, a `hooks.before` rejects
+  `/delete-user` without a password: Better Auth would otherwise allow
+  passwordless deletion on a session under a day old, so a stolen session
+  cookie could erase an account. It is rate-limited to 3 per 10s, and an
+  "account deleted" notice is emailed when email is enabled. No
+  email-confirmation step, since that can't work while email is disabled.
 
 ## Status at the end of the 5-day build (2026-09-14)
 
