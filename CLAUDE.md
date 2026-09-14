@@ -411,6 +411,19 @@ rather than silently changing direction.
   shared Postgres limiter; the 429 is a small HTML page with `no-store`.
   The proxy matcher covers only that page. API routes enforce their own
   limits.
+- **2026-09-14 — Email verification for new signups.** Better Auth
+  `requireEmailVerification`, with links sent via Resend's HTTP API
+  (`src/lib/email.ts`, no SDK). Signing in to an unverified account sends a
+  fresh link. Links expire after 1 hour and sign the user in; they land on
+  `/email-verified`, which also explains expired or invalid links. Sign-up
+  returns the same response for already-registered emails (no account
+  enumeration). Emails are sent via `after()` so responses don't wait on the
+  provider. Transport: Resend if `RESEND_API_KEY` + `EMAIL_FROM` are set;
+  console in `next dev` or with `EMAIL_TRANSPORT=console`; otherwise
+  **disabled**, which turns verification off and logs a startup warning
+  (chosen so production signups keep working until a sending domain exists).
+  Accounts that existed before migration `0007` are grandfathered as
+  verified.
 
 ## Status at the end of the 5-day build (2026-09-14)
 
@@ -438,6 +451,10 @@ endpoint and a republish; it should then reach `self_declared`.
 - Rate limits trust `x-forwarded-for`, which is correct on Vercel but
   spoofable for self-hosters not behind a proxy. For serious abuse, add a
   platform/WAF rate limit.
+- Email verification is **off in production** until `RESEND_API_KEY` and
+  `EMAIL_FROM` (on a Resend-verified domain) are set. Accounts created
+  between the grandfathering migration and that moment are unverified and
+  will be asked to verify on their next sign-in.
 - Manifests published before the self-attestation fields existed are served
   as-is until their next re-check, and they don't validate against the
   current schema. Only leasetab.com's is affected.

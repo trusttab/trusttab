@@ -32,7 +32,7 @@ authorized to act for someone. TrustTab is complementary: it verifies the
 
 ## How verification works
 
-1. **Claim your domain.** Sign up, enter your domain, and add the generated tag
+1. **Claim your domain.** Sign up (and confirm your email address), enter your domain, and add the generated tag
    to the `<head>` of your homepage:
 
    ```html
@@ -227,6 +227,7 @@ npm run dev                  # http://localhost:3000
 | `TRUSTTAB_ISSUER_NAME` | Issuer name written into signed manifests |
 | `TRUSTTAB_ISSUER_URL` | Public `https://` base URL of this instance, written into manifests |
 | `TRUSTTAB_SIGNING_PRIVATE_KEY` | Ed25519 signing key. Generate with `npm run keys:generate` and back it up |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification** (with a startup warning) |
 | `AGENTTRUST_VERIFY_TOKEN` | *Optional.* Makes this deployment publish its own verification tag so it can claim its own domain |
 
 ### Deploying to Vercel
@@ -235,8 +236,8 @@ npm run dev                  # http://localhost:3000
 2. In the project's **Storage** tab, add a Neon Postgres database. This sets
    `DATABASE_URL` for you.
 3. Add `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TRUSTTAB_ISSUER_NAME`,
-   `TRUSTTAB_ISSUER_URL` and `TRUSTTAB_SIGNING_PRIVATE_KEY` under
-   **Settings → Environment Variables**.
+   `TRUSTTAB_ISSUER_URL`, `TRUSTTAB_SIGNING_PRIVATE_KEY`, `RESEND_API_KEY` and
+   `EMAIL_FROM` under **Settings → Environment Variables**.
 4. Run migrations against the production database from your machine:
    `vercel env pull .env.production.local`, then
    `DATABASE_URL=<direct, unpooled URL> npm run db:migrate`. With Neon, that's
@@ -301,6 +302,7 @@ drizzle/                generated SQL migrations
 - [x] Self-attestation for forms rendered by JavaScript (shown as "Self-declared", never "Verified")
 - [x] Rate limiting and IP minimization on public endpoints
 - [x] Sign-in/sign-up rate limiting that holds across serverless instances
+- [x] Email verification for new accounts (needs a Resend key and verified sending domain in production)
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
 - [ ] Scheduled re-verification
 

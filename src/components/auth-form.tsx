@@ -6,11 +6,16 @@ import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
 
+/** Where links in verification emails land (see src/app/email-verified). */
+const VERIFICATION_CALLBACK = "/email-verified";
+
 /** Shared email/password form for /login and /signup. */
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /** Set when the user must click the link we emailed before they can sign in. */
+  const [checkInboxFor, setCheckInboxFor] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -21,22 +26,63 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     const email = String(form.get("email"));
     const password = String(form.get("password"));
 
-    const { error } =
-      mode === "signup"
-        ? // Better Auth requires a display name; we don't ask for one yet.
-          await authClient.signUp.email({ email, password, name: email.split("@")[0] })
-        : await authClient.signIn.email({ email, password });
-
-    if (error) {
-      setError(error.message ?? "Something went wrong. Please try again.");
-      setPending(false);
-      return;
+    if (mode === "signup") {
+      const { data, error } = await authClient.signUp.email({
+        email,
+        password,
+        name: email.split("@")[0], // Better Auth requires a display name; we don't ask for one yet.
+        callbackURL: VERIFICATION_CALLBACK,
+      });
+      if (error) return fail(error.message);
+      // No session token means email verification is required. (Better Auth
+      // returns the same response for an already-registered email, so this
+      // screen doesn't reveal which addresses have accounts.)
+      if (!data?.token) {
+        setCheckInboxFor(email);
+        setPending(false);
+        return;
+      }
+    } else {
+      const { error } = await authClient.signIn.email({ email, password, callbackURL: VERIFICATION_CALLBACK });
+      if (error?.code === "EMAIL_NOT_VERIFIED") {
+        // Better Auth has just emailed a fresh verification link.
+        setCheckInboxFor(email);
+        setPending(false);
+        return;
+      }
+      if (error) return fail(error.message);
     }
+
     router.push("/dashboard");
     router.refresh();
   }
 
+  function fail(message: string | undefined) {
+    setError(message ?? "Something went wrong. Please try again.");
+    setPending(false);
+  }
+
   const isSignup = mode === "signup";
+
+  if (checkInboxFor) {
+    return (
+      <div className="mx-auto max-w-sm space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Check your inbox</h1>
+        <p className="text-zinc-700">
+          {isSignup ? "We've sent" : "Your email address isn't verified yet. We've sent"} a verification link to{" "}
+          <span className="font-medium break-all">{checkInboxFor}</span>. Click it to{" "}
+          {isSignup ? "finish creating your account" : "verify your address and sign in"}.
+        </p>
+        <p className="text-sm text-zinc-500">
+          The link expires in an hour. Didn&apos;t get it? Check your spam folder, or{" "}
+          <Link href="/login" className="underline" onClick={() => setCheckInboxFor(null)}>
+            log in
+          </Link>{" "}
+          again to get a new one.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-sm space-y-6">

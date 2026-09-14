@@ -50,6 +50,13 @@
       "when": 1789423197154,
       "tag": "0006_self_attestation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789426031468,
+      "tag": "0007_grandfather_email_verification",
+      "breakpoints": true
     }
   ]
 }
