@@ -342,6 +342,29 @@ rather than silently changing direction.
     manifest never overstates the latest run. Versions therefore grow with
     each re-check.
   - 20-second per-site cooldown between runs.
+- **2026-09-14 — Link-tag fallback for manifest discovery (Day 4).** Hosted
+  site builders (Base44, confirmed in production with leasetab.com; likely
+  Webflow, Squarespace, Wix) reserve `/.well-known/`, which would exclude a
+  large part of the ICP. Sites may instead add
+  `<link rel="agent-trust-manifest" href="<issuer>/api/manifest/<domain>">`
+  to the homepage `<head>`. Rules: `/.well-known/agent-trust.json` is tried
+  first, and if it serves a manifest-shaped JSON document that document is
+  authoritative (no fallback), because it's what well-known readers get. Only
+  `<head>` links count. The href may only point to the site itself or exactly
+  the issuer's manifest URL for the domain. Agents should look in both places.
+- **2026-09-14 — Public registry (Day 4).** `GET /api/verify/:verificationId`
+  returns the spec's fields plus `verification_id`, `issuer` and
+  `manifest_url`. Public status adds a derived `expired` (last run passed but
+  the current manifest is past `expires_at`). The badge is
+  `/api/badge/<verification_id>.svg`, keyed by the public `tt_…` ID rather
+  than the internal site UUID the spec named, so every public surface shares
+  one identifier. A human-readable `/verify/:verificationId` page is what
+  badges link to.
+- **2026-09-14 — Traffic log.** `manifest_hits` rows are written after the
+  response (`after()`) for the manifest and registry endpoints. Badge loads
+  are not logged (they would be every page view of the embedding site).
+  TrustTab's own verification fetches are counted. Full client IPs are stored
+  as the spec says; see open questions.
 
 ## Open questions
 
@@ -353,6 +376,12 @@ rather than silently changing direction.
 - Forms rendered only client-side (SPAs) can't pass endpoint match. A
   headless-browser fetch would fix this but is heavy for serverless.
 - Injection scan ignores class-based CSS hiding and `<script>` content.
+- JS-rendered forms: confirmed on leasetab.com (Base44). Options: a hosted
+  headless-render step, or an owner-declared flag with a clearly weaker check.
+  Needs a product decision.
+- `manifest_hits` stores full IPs with no retention limit and no rate limit
+  on the public endpoints. Consider truncating IPs and pruning old rows
+  before real traffic arrives.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

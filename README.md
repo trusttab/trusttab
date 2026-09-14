@@ -6,8 +6,8 @@ form, a booking page, a support ticket), verifies that claim automatically, and
 issues a badge that anyone can check against a public registry.
 
 > **Status: early development.** This repository is being built in the open.
-> Today it covers accounts, domain-ownership verification, signed manifests
-> and the verification checks; the public badge is next (see [Roadmap](#roadmap)).
+> The full loop works: claim a domain, publish a signed manifest, get
+> checked, and show a live badge. Expect rough edges (see [Roadmap](#roadmap)).
 
 ## Why this exists
 
@@ -40,28 +40,42 @@ authorized to act for someone. TrustTab is complementary: it verifies the
    ```
 
    Click **Check now**. TrustTab fetches `https://your-domain/` and confirms
-   the tag is present. *(Available today.)*
+   the tag is present.
 
 2. **Declare your agent-safe endpoints.** Describe each form: its path,
    method, purpose (from a fixed, centrally maintained list such as
    `lead_inquiry` or `booking`) and field schema. TrustTab signs the manifest
-   and serves it. Redirect `/.well-known/agent-trust.json` on your site to
-   the manifest URL TrustTab shows you. *(Available today.)*
+   and serves it. Point your site at it with a `/.well-known/agent-trust.json`
+   redirect or a `<link rel="agent-trust-manifest">` tag (see [Discovery](#discovery)).
 
 3. **Get checked.** TrustTab confirms each declared form exists with the
    declared fields, scans the page for hidden prompt-injection content,
    checks HTTPS, and makes sure the manifest's domain matches the domain
    serving it. Click **Re-check now** to run the checks; passing sites are
    marked verified and their manifest is re-signed with `verified_at`.
-   *(Available today; the public badge is in progress.)*
 
    | Check | Passes when |
    | --- | --- |
    | Endpoint match | Each declared page has a server-rendered `<form>` containing every declared field name |
    | Injection scan | No instruction-override phrases or chat-template markers, and no hidden text directing AI agents |
    | HTTPS | Pages load over HTTPS with valid certificates |
-   | Domain match | `/.well-known/agent-trust.json` serves a manifest signed for *this* domain and registration |
+   | Domain match | The discovered manifest is signed for *this* domain and registration |
    | Expiry | That served manifest hasn't expired |
+
+4. **Show the badge.** Embed the snippet from your dashboard. It displays your
+   live status and links to a public verification page on the issuer.
+
+## Public API
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/manifest/:domain` | The live signed manifest for a domain |
+| `GET /api/verify/:verificationId` | `{ verification_id, status, domain, verified_at, expires_at, issuer, manifest_url }`. `status` is `verified`, `pending`, `needs_fix`, `failed` or `expired` |
+| `GET /api/badge/:verificationId.svg` | Live status badge |
+| `GET /.well-known/jwks.json` | The issuer's public signing keys |
+
+All public endpoints send `Access-Control-Allow-Origin: *`. Requests to the
+manifest and verify endpoints appear in the site owner's traffic log.
 
 ## The manifest
 
@@ -101,9 +115,24 @@ signed but the verification checks haven't passed yet. **Agents should only
 treat a manifest as verified when `verified_at` is set and `expires_at` is in
 the future.**
 
-A site's live manifest is served at `<issuer>/api/manifest/<domain>`. Site
-owners make it available at `https://<domain>/.well-known/agent-trust.json` by
-redirecting that path to the issuer.
+A site's live manifest is served at `<issuer>/api/manifest/<domain>`.
+
+### Discovery
+
+Agents find a site's manifest in one of two places, checked in this order:
+
+1. **`https://<domain>/.well-known/agent-trust.json`**, typically a redirect to
+   the issuer URL above.
+2. **A link in the homepage `<head>`**, for platforms that reserve
+   `/.well-known/` (many hosted site builders do):
+
+   ```html
+   <link rel="agent-trust-manifest" href="https://<issuer>/api/manifest/<domain>">
+   ```
+
+If the well-known path serves a manifest, that one wins. Either way, always
+check the manifest's signature and that `site.domain` matches the site you're
+on.
 
 ### Verifying a signature yourself
 
@@ -203,6 +232,9 @@ src/
     api/auth/[...all]   Better Auth endpoints
     api/sites/          domain claims, ownership checks, manifest publishing, verification
     api/manifest/       public manifest lookup
+    api/verify/         public registry lookup
+    api/badge/          live status badge (SVG)
+    verify/             public verification page (badge link target)
     .well-known/        public signing keys (JWKS)
     dashboard/          signed-in UI
   components/           UI components
@@ -224,7 +256,9 @@ drizzle/                generated SQL migrations
 - [x] Domain claim + ownership verification via meta tag
 - [x] Manifest generator: declare endpoints, validate against the schema, sign, serve at `/api/manifest/[domain]`
 - [x] Verification engine: endpoint/field match, prompt-injection scan, HTTPS, domain match, expiry
-- [ ] Public verify endpoint, badge SVG, request log
+- [x] Public verify endpoint, badge SVG, request log
+- [x] `<link rel="agent-trust-manifest">` discovery for platforms that reserve `/.well-known/`
+- [ ] Detect forms rendered by client-side JavaScript
 - [ ] Scheduled re-verification
 
 ## Contributing

@@ -1,4 +1,5 @@
 import { normalizeDomain } from "@/lib/domain";
+import { recordHit } from "@/lib/hits";
 import { getLiveManifestForDomain } from "@/lib/manifest/queries";
 
 const publicHeaders = {
@@ -15,7 +16,7 @@ const publicHeaders = {
  * An expired manifest is still served: `site.expires_at` is part of the signed
  * document, and consumers must check it themselves.
  */
-export async function GET(_request: Request, ctx: RouteContext<"/api/manifest/[domain]">) {
+export async function GET(request: Request, ctx: RouteContext<"/api/manifest/[domain]">) {
   const { domain: rawDomain } = await ctx.params;
   const normalized = normalizeDomain(decodeURIComponent(rawDomain));
   if (!normalized.ok) {
@@ -30,11 +31,15 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/manifest/[d
     );
   }
 
+  recordHit(request, manifest.siteId, "manifest");
+
   return new Response(JSON.stringify(manifest.payloadJson, null, 2), {
     headers: {
       ...publicHeaders,
       "content-type": "application/json; charset=utf-8",
-      // Short cache: a re-published or re-verified manifest should show up fast.
+      // Short browser cache (no s-maxage, so CDN requests still reach the
+      // function and are counted in the traffic log). A re-published or
+      // re-verified manifest should show up fast.
       "cache-control": "public, max-age=60",
       "x-trusttab-manifest-version": String(manifest.version),
     },

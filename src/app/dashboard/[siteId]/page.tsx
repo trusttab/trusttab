@@ -2,16 +2,18 @@ import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BadgeSnippet } from "@/components/badge-snippet";
 import { ManifestEditor } from "@/components/manifest-editor";
 import { OwnershipPanel } from "@/components/ownership-panel";
 import { PublishedManifest } from "@/components/published-manifest";
 import { siteStatusLabel, siteStatusTone, StatusPill } from "@/components/status-pill";
+import { TrafficLog } from "@/components/traffic-log";
 import { VerificationPanel } from "@/components/verification-panel";
 import { db } from "@/db";
 import { sites } from "@/db/schema";
 import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
-import { getLatestManifest, getLatestVerificationRun, isManifestExpired } from "@/lib/manifest/queries";
+import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
 import type { Manifest, ManifestInput } from "@/lib/manifest/types";
 import { verificationSnippet } from "@/lib/ownership";
 
@@ -35,9 +37,9 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     .where(and(eq(sites.id, siteId), eq(sites.userId, user.id)));
   if (!site) notFound();
 
-  const [latest, lastRun] = site.ownershipVerifiedAt
-    ? await Promise.all([getLatestManifest(site.id), getLatestVerificationRun(site.id)])
-    : [undefined, undefined];
+  const [latest, lastRun, traffic] = site.ownershipVerifiedAt
+    ? await Promise.all([getLatestManifest(site.id), getLatestVerificationRun(site.id), getTraffic(site.id)])
+    : [undefined, undefined, undefined];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -84,10 +86,10 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
         </section>
       )}
 
-      {/* Placeholder so the shape of the finished page is visible. */}
-      <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-500">
-        Badge snippet and traffic log will appear here. (Coming in a later build day.)
-      </section>
+      {site.verificationId && issuerUrl && (
+        <BadgeSnippet issuerUrl={issuerUrl} verificationId={site.verificationId} />
+      )}
+      {traffic && latest && <TrafficLog hits={traffic.hits} counts={traffic.counts} />}
     </div>
   );
 }

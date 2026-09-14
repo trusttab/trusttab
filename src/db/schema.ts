@@ -197,6 +197,26 @@ export const verificationRuns = pgTable(
 );
 
 /**
+ * One row per request to a site's public endpoints (the manifest and the
+ * registry lookup), shown to the owner as a traffic log.
+ */
+export const manifestHits = pgTable(
+  "manifest_hits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** Which public endpoint was hit: "manifest" or "verify". */
+    endpoint: text("endpoint").$type<"manifest" | "verify">().notNull(),
+    requesterIp: text("requester_ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
+);
+
+/**
  * Denormalized copy of each manifest's endpoints, so the verification engine
  * and dashboard can query endpoints without unpacking JSON.
  */

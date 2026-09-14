@@ -22,6 +22,13 @@
       "when": 1789419517505,
       "tag": "0002_verification_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789420801232,
+      "tag": "0003_manifest_hits",
+      "breakpoints": true
     }
   ]
 }
