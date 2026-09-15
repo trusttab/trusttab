@@ -64,6 +64,13 @@
       "when": 1789435584480,
       "tag": "0008_assistant_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789484296579,
+      "tag": "0009_rate_limit_expiry",
+      "breakpoints": true
     }
   ]
 }

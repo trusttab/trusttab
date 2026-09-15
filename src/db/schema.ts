@@ -278,12 +278,25 @@ export const manifestHits = pgTable(
 );
 
 /** Fixed-window request counters for rate limiting: public endpoints and auth (see src/lib/rate-limit.ts). */
-export const rateLimitBuckets = pgTable("rate_limit_buckets", {
-  /** HMAC of `<bucket>:<client IP>` or `auth:<ip>|<path>`; never a raw IP. */
-  key: text("key").primaryKey(),
-  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
-  count: integer("count").notNull(),
-});
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    /** HMAC of `<bucket>:<client IP>` or `auth:<ip>|<path>`; never a raw IP. */
+    key: text("key").primaryKey(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull(),
+    /**
+     * When the current window ends. Stored per row because windows differ
+     * (seconds for sign-in, a day for AI text checks), so stale rows can be
+     * pruned without cutting a longer window short.
+     */
+    // The default only covers code deployed before this column existed; current code always sets it.
+    expiresAt: timestamp("expires_at", { withTimezone: true })
+      .notNull()
+      .default(sql`now() + interval '1 hour'`),
+  },
+  (t) => [index("rate_limit_buckets_expires_at_idx").on(t.expiresAt)],
+);
 
 /**
  * Denormalized copy of each manifest's endpoints, so the verification engine
