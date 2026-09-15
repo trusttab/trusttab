@@ -3,15 +3,28 @@ import { NextResponse, type NextRequest } from "next/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
- * Runs before matching requests reach the app (Next.js 16 "proxy", formerly
- * middleware; Node.js runtime).
+ * Runs before requests reach the app (Next.js 16 "proxy", formerly
+ * middleware; Node.js runtime). Two jobs:
  *
- * Its only job today is rate-limiting the public verification page. Pages
- * can't return a 429 status themselves, and every render of that page does
- * registry lookups, so it gets the same Postgres-backed per-IP limit as the
- * public API routes (which enforce theirs inside each route handler).
+ * 1. Reject request paths that aren't valid percent-encoding (e.g.
+ *    `/api/manifest/%E0%A4%A`) with a 400. Otherwise Next.js fails while
+ *    decoding route parameters, before any route handler runs, and responds
+ *    with a 500.
+ * 2. Rate-limit the public verification page. Pages can't return a 429
+ *    themselves, and every render of that page does registry lookups, so it
+ *    gets the same Postgres-backed per-IP limit as the public API routes
+ *    (which enforce theirs inside each route handler).
  */
 export async function proxy(request: NextRequest) {
+  if (!isDecodablePath(request.url)) {
+    return new NextResponse("Bad request: the address contains invalid percent-encoding.", {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+
+  if (!request.nextUrl.pathname.startsWith("/verify/")) return NextResponse.next();
+
   const limited = await enforceRateLimit(request, "page");
   if (!limited) return NextResponse.next();
 
@@ -30,6 +43,19 @@ export async function proxy(request: NextRequest) {
   );
 }
 
+/** True if every percent-escape in the URL's path decodes to valid UTF-8. */
+function isDecodablePath(rawUrl: string): boolean {
+  // Take the path from the raw URL string: URL parsing keeps escapes as-is.
+  const path = rawUrl.replace(/^[a-z]+:\/\/[^/]*/i, "").split(/[?#]/, 1)[0];
+  try {
+    decodeURIComponent(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const config = {
-  matcher: "/verify/:verificationId",
+  // Everything except Next's static assets and image optimizer.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
