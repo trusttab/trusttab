@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function ClaimDomainForm() {
+export function ClaimDomainForm({ initialDomain = "" }: { initialDomain?: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -35,6 +35,7 @@ export function ClaimDomainForm() {
         <span className="text-sm font-medium">Domain</span>
         <input
           name="domain"
+          defaultValue={initialDomain}
           required
           placeholder="example.com"
           autoComplete="off"

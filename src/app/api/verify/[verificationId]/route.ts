@@ -1,15 +1,9 @@
 import { getIssuer } from "@/lib/manifest/build";
 import { recordHit } from "@/lib/hits";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { lookupRegistryEntry } from "@/lib/registry";
+import { lookupRegistryEntry, REGISTRY_RESPONSE_HEADERS, registryEntryJson } from "@/lib/registry";
 
-const publicHeaders = {
-  "access-control-allow-origin": "*",
-  "x-content-type-options": "nosniff",
-  // `private`: browser cache only. A shared/CDN cache would hide requests
-  // from the rate limiter and the traffic log.
-  "cache-control": "private, max-age=60",
-};
+const publicHeaders = REGISTRY_RESPONSE_HEADERS;
 
 /**
  * GET /api/verify/:verificationId — public registry lookup.
@@ -39,18 +33,5 @@ export async function GET(request: Request, ctx: RouteContext<"/api/verify/[veri
 
   recordHit(request, entry.siteId, "verify");
 
-  const issuer = getIssuer();
-  return Response.json(
-    {
-      verification_id: entry.verificationId,
-      status: entry.status,
-      domain: entry.domain,
-      verified_at: entry.verifiedAt?.toISOString() ?? null,
-      expires_at: entry.expiresAt?.toISOString() ?? null,
-      issuer: { name: issuer.name, url: issuer.url },
-      manifest_url: `${issuer.url}/api/manifest/${entry.domain}`,
-      self_declared_endpoints: entry.selfDeclaredEndpoints,
-    },
-    { headers: publicHeaders },
-  );
+  return Response.json(registryEntryJson(entry, getIssuer()), { headers: publicHeaders });
 }

@@ -1,4 +1,7 @@
-import { isIP } from "node:net";
+/**
+ * Browser-safe on purpose (no Node built-ins): the TrustTab browser extension
+ * uses this too, so a tab's hostname is normalized exactly as the server does.
+ */
 
 export type DomainResult =
   | { ok: true; domain: string }
@@ -57,7 +60,8 @@ export function normalizeDomain(input: string): DomainResult {
   hostname = hostname.replace(/\.$/, "");
   if (hostname.startsWith("www.")) hostname = hostname.slice(4);
 
-  if (isIP(hostname) || hostname.startsWith("[")) {
+  // The URL parser has already normalized IPv4 to dotted form and wraps IPv6 in [].
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.startsWith("[")) {
     return { ok: false, error: "Enter a domain name, not an IP address." };
   }
 
