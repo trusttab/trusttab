@@ -114,26 +114,28 @@ describe("dashboard assistant capabilities", () => {
   });
 });
 
-describe("AI text estimate capabilities", () => {
-  const AI_TEXT_DIR = path.join(SRC, "lib/ai-text");
+describe("AI Check estimate capabilities (text and image)", () => {
   const entries = [
-    ...readdirSync(AI_TEXT_DIR)
-      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-      .map((f) => path.join(AI_TEXT_DIR, f)),
+    ...["lib/ai-text", "lib/ai-image", "lib/ai-check"].flatMap((dir) =>
+      readdirSync(path.join(SRC, dir))
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+        .map((f) => path.join(SRC, dir, f)),
+    ),
     path.join(SRC, "app/api/ai-check/text/route.ts"),
+    path.join(SRC, "app/api/ai-check/image/route.ts"),
   ];
 
   test("its import graph never reaches code that signs or publishes", () => {
     const graph = importGraph(entries);
     const reached = FORBIDDEN.filter((f) => graph.has(f)).map((f) => path.relative(SRC, f));
-    assert.deepEqual(reached, [], `AI text code can reach: ${reached.join(", ")}`);
+    assert.deepEqual(reached, [], `AI Check code can reach: ${reached.join(", ")}`);
   });
 
-  test("page text is never written to the traffic log or other tables", () => {
+  test("page text and images are never written to the traffic log or other tables, or logged", () => {
     for (const file of importGraph(entries)) {
       if (file.endsWith("lib/rate-limit.ts") || file.endsWith("db/index.ts") || file.endsWith("db/schema.ts") || file.endsWith("lib/ip.ts")) continue;
       const source = readFileSync(file, "utf8");
-      assert.doesNotMatch(source, /recordHit|manifestHits|db\.insert|db\.update|console\.\w+\([^)]*[,(]\s*(text|rawText|raw|body|request)\b/, path.relative(SRC, file));
+      assert.doesNotMatch(source, /recordHit|manifestHits|db\.insert|db\.update|console\.\w+\([^)]*[,(]\s*(text|rawText|raw|body|request|bytes|jpeg)\b/, path.relative(SRC, file));
     }
   });
 });

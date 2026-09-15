@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { consumeRateLimit, enforcePaidRateLimits } from "@/lib/rate-limit";
 
+import { POST as POST_IMAGE } from "@/app/api/ai-check/image/route";
 import { OPTIONS, POST } from "@/app/api/ai-check/text/route";
 
 // The route reads the key per request. Its model paths are not exercised; a
@@ -108,5 +109,27 @@ describe("POST /api/ai-check/text before the model call", () => {
     assert.equal((await POST(request(randomIp(), "not json"))).status, 400);
     assert.equal((await POST(request(randomIp(), { text: 42 }))).status, 400);
     assert.equal((await POST(request(randomIp(), { text: "x".repeat(70_000) }))).status, 413);
+  });
+});
+
+describe("POST /api/ai-check/image before the model call", () => {
+  const imageRequest = (ip: string | null, body: BodyInit, type = "image/jpeg") =>
+    new Request("http://localhost/api/ai-check/image", {
+      method: "POST",
+      headers: { "content-type": type, ...(ip ? { "x-forwarded-for": ip } : {}) },
+      body,
+    });
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+
+  test("only JPEG bodies within the size limit", async () => {
+    assert.equal((await POST_IMAGE(imageRequest(randomIp(), jpeg, "image/png"))).status, 415);
+    assert.equal((await POST_IMAGE(imageRequest(randomIp(), new Uint8Array([0x89, 0x50, 0x4e, 0x47])))).status, 400);
+    assert.equal((await POST_IMAGE(imageRequest(randomIp(), new Uint8Array(1_600_000)))).status, 413);
+  });
+
+  test("a JPEG without a client IP is refused before any model call", async () => {
+    const response = await POST_IMAGE(imageRequest(null, jpeg));
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("access-control-allow-origin"), "*");
   });
 });

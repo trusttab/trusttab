@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { DEFAULT_AI_TEXT_MODEL, estimateText, InvalidModelOutputError } from "@/lib/ai-text/estimate";
 import { countWords, MAX_CHARS, MIN_WORDS, prepareText } from "@/lib/ai-text/display";
-import { aiTextRateLimits } from "@/lib/ai-text/limits";
+import { aiTextRateLimits } from "@/lib/ai-check/limits";
 import { enforcePaidRateLimits } from "@/lib/rate-limit";
 
 export const maxDuration = 30;

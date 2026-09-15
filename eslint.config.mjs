@@ -21,8 +21,8 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    // The dashboard assistant and the AI text estimate both call a model; neither may reach signing or publishing.
-    files: ["src/lib/assistant/**/*.ts", "src/lib/ai-text/**/*.ts", "src/app/api/ai-check/**/*.ts"],
+    // The dashboard assistant and the AI Check estimates all call a model; none may reach signing or publishing.
+    files: ["src/lib/assistant/**/*.ts", "src/lib/ai-text/**/*.ts", "src/lib/ai-image/**/*.ts", "src/lib/ai-check/**/*.ts", "src/app/api/ai-check/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -52,6 +52,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Built extension bundles (generated, gitignored).
+    "extension/dist/**",
   ]),
 ]);
 
