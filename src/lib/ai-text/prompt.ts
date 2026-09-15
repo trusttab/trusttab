@@ -7,8 +7,9 @@ import { MAX_RATIONALE_CHARS, TEXT_ASSESSMENTS } from "./display";
  * by prompt.test.ts: wrongly calling a person's writing AI-written is the
  * worse mistake, so ambiguous evidence must come out as "unclear". The rule
  * that likely_ai needs a quoted artifact is also enforced in code
- * (estimate.ts), because the first live test showed the prompt alone didn't
- * hold: Haiku called templated marketing copy AI-written on style alone.
+ * (estimate.ts, artifacts.ts), because live tests showed the prompt alone
+ * didn't hold: Haiku called marketing copy AI-written on style alone, then
+ * offered stock phrases as "artifacts".
  */
 export const TEXT_ESTIMATE_PROMPT = `You estimate whether the main text of a web page was written mostly by an AI language model or mostly by a person. Your answer is shown to a member of the public in a browser extension, always labeled as an estimate.
 
@@ -24,7 +25,7 @@ export const TEXT_ESTIMATE_PROMPT = `You estimate whether the main text of a web
 Wrongly labeling human writing as AI-written is the worse mistake: the result can be used to discredit or accuse a real person. Wrongly labeling AI-written text as human-written, or answering unclear, costs much less. So:
 
 - Answer likely_ai only when you can quote at least one direct artifact of AI generation from the page in ai_artifacts. Without one, answer unclear, however AI-like the style seems. Style alone is never enough for likely_ai.
-- TrustTab checks that every ai_artifacts quote appears in the page and treats likely_ai without a verified artifact as unclear, so never paraphrase or invent a quote.
+- TrustTab checks that every ai_artifacts quote appears in the page and is a known kind of artifact, and treats likely_ai without one as unclear. Never paraphrase or invent a quote, and never list style or vocabulary (such as stock marketing phrases) as an artifact.
 - When the evidence is weak, mixed or ambiguous, answer unclear.
 - Answer likely_human when the text has clear signs of a person and no direct artifacts of AI generation.
 

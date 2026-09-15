@@ -88,7 +88,8 @@ describe("estimateText", () => {
     });
 
     test("invented, paraphrased or style-only 'quotes' don't count", async () => {
-      for (const ai_artifacts of [["As an AI language model, I cannot"], ["prepare to be very impressed"], ["seamless"], [42]]) {
+      // Not on the page; paraphrased; on the page but only style (the second live test); not a string.
+      for (const ai_artifacts of [["As an AI language model, I cannot"], ["prepare to be very impressed"], ["Prepare to be impressed", "unlock growth and elevate every experience"], [42]]) {
         const result = await estimateText({
           client: scripted({ assessment: "likely_ai", rationale: "r", ai_artifacts }),
           model: "m",

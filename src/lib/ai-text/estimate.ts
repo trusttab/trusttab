@@ -13,6 +13,7 @@ import {
   type TextAssessment,
   type TextEstimateResponse,
 } from "./display";
+import { matchArtifactPattern } from "./artifacts";
 import { pageTextMessage, REPORT_TOOL, TEXT_ESTIMATE_PROMPT } from "./prompt";
 
 /** Default model; override with AI_TEXT_MODEL. Cheap on purpose: no model does this reliably. */
@@ -81,14 +82,16 @@ export const STYLE_ONLY_RATIONALE =
 
 /**
  * The bias rule, enforced in code (the prompt states it too): likely_ai
- * stands only with at least one quoted artifact of AI generation that really
- * appears in the page text. Otherwise the result is "unclear". Quotes the
- * model paraphrased or invented don't count. Wrongly calling a person's
+ * stands only with at least one quote that appears verbatim in the page text
+ * AND matches a known artifact pattern (artifacts.ts). Otherwise the result
+ * is "unclear". Quotes the model paraphrased or invented don't count, and
+ * neither do stock phrases the model offered as "artifacts". Wrongly calling a person's
  * writing AI-written is the worse mistake, and a prompt alone didn't hold.
  *
- * Limit: code can verify that a quote is on the page, not that it really is
- * an artifact of AI generation. That part stays the model's judgment, which
- * is why the result is still labeled an estimate.
+ * Limit: code can verify that a quote is on the page and looks like a
+ * known artifact, not that it really is one (an article may quote a
+ * chatbot). That part stays the model's judgment, which is why the result
+ * is still labeled an estimate.
  */
 export function applyEvidenceRule(
   estimate: Extract<TextEstimateResponse, { result: "estimate" }>,
@@ -101,8 +104,7 @@ export function applyEvidenceRule(
   const verified = artifacts
     .filter((a): a is string => typeof a === "string")
     .map((a) => a.replace(/\s+/g, " ").trim())
-    // At least two words, so a single stock word ("seamless") can't stand in for an artifact.
-    .filter((a) => a.length >= 8 && a.length <= MAX_EVIDENCE_CHARS && a.split(" ").length >= 2 && haystack.includes(normalizeForQuote(a)))
+    .filter((a) => a.length <= MAX_EVIDENCE_CHARS && matchArtifactPattern(a) !== null && haystack.includes(normalizeForQuote(a)))
     .slice(0, MAX_EVIDENCE_ITEMS);
 
   if (verified.length === 0) return { ...estimate, assessment: "unclear", rationale: STYLE_ONLY_RATIONALE, evidence: [] };

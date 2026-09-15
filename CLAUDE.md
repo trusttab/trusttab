@@ -574,12 +574,20 @@ rather than silently changing direction.
     marketing phrases"). So likely_ai now requires the model to quote at
     least one direct artifact of AI generation (leftover chatbot phrasing,
     unfilled placeholders, prompt remnants) in `ai_artifacts`.
-    `applyEvidenceRule` keeps likely_ai only if a quote of two or more words
-    appears verbatim in the page text. Otherwise the result is "Can't tell"
-    with a fixed rationale, and the verified quotes are shown as evidence.
-    Code can verify a quote exists, not that it's truly an artifact.
+    A second live test showed Haiku offering stock phrases ("fast-paced
+    digital landscape") as artifacts. So `applyEvidenceRule` keeps likely_ai
+    only if a quote appears verbatim in the page text **and** matches the
+    explicit, extendable pattern list in `src/lib/ai-text/artifacts.ts`
+    (chatbot openers/sign-offs, "as an AI language model", unfilled
+    `[placeholders]`, knowledge-cutoff mentions). Otherwise the result is
+    "Can't tell" with a fixed rationale, and the verified quotes are shown as
+    evidence. Code can verify a quote exists and looks like an artifact, not
+    that it truly is one (an article may quote a chatbot).
     Consequence: fluent AI text with no artifacts comes out "Can't tell".
-    `prompt.test.ts` and `estimate.test.ts` pin both halves.
+    `prompt.test.ts`, `estimate.test.ts` and `artifacts.test.ts` pin this,
+    including the live-test phrases as regressions. The same page's result
+    also moved between prompt versions (leasetab.com: likely_ai, then
+    likely_human), which is expected of an estimate.
     Page text is wrapped in `<page_text>` as untrusted data (it can't close
     the tag). A page can still try to steer its own estimate; that's
     accepted, given the estimate labeling.
