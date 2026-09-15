@@ -665,6 +665,24 @@ rather than silently changing direction.
     budget is shared with 2b as `ai-check-all` (`AI_CHECK_DAILY_CAP`,
     renamed from `AI_TEXT_DAILY_CAP`; resets the shared counter once).
     Limit modules moved to `src/lib/ai-check/`.
+  - **Live results (2026-09-15):**
+    - **Tier 1 on real-world signed files** (contentauth/verify-site
+      fixtures): an Adobe Firefly image comes out verified, "created with
+      generative AI"; a Photoshop export and a Cloudinary image are also
+      verified. All three chain only to the interim list, so the fallback
+      is needed today. An Adobe Lightroom/Photoshop file with an untrusted
+      certificate shows as unverified.
+    - **Tier 2 on production:**
+      - A real landscape photo, the Mona Lisa, and Bosch's *Garden of
+        Earthly Delights* came back no_clear_signs, so no false positives.
+      - Three DALL·E images came back possibly_ai with genuine artifacts:
+        garbled text, melted hands, puzzle pieces that don't connect, and
+        the DALL·E corner watermark (after naming it in the definition).
+      - One AI image was missed, as low recall is expected.
+    - **Prompt fix after the live run:** the model had cited "puzzle pieces
+      floating in the sky" (subject matter), so the prompt now says surreal
+      subject matter isn't an artifact (pinned). It can still list a weaker
+      extra artifact next to a genuine one.
   - **Not covered:** Google SynthID (needs Google's detector), CSS background
     images, and images inside iframes.
 
