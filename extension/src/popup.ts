@@ -1,6 +1,9 @@
+import { describeTextEstimate, MAX_CHARS, type TextEstimateOutcome } from "@/lib/ai-text/display";
 import { describeLookup, type LookupOutcome } from "@/lib/registry-display";
 
 import { domainFromTabUrl, lookupDomain } from "./lookup";
+import { requestTextEstimate } from "./text-estimate";
+import { extractMainText } from "./text-extract";
 import { WIDGET_SIGNATURES } from "./widget-signatures";
 import { collectPageEvidence, describeWidgetCheck, detectWidgets, selectorsFor, type WidgetCheckOutcome } from "./widgets";
 
@@ -136,6 +139,63 @@ function renderWidgetCheck(outcome: WidgetCheckOutcome) {
   list.hidden = display.items.length === 0;
 }
 
+/**
+ * AI Check 2b, run only from the "Check this page's writing" button: reads
+ * the page's main text in the active tab, then sends it to TrustTab. Nothing
+ * is extracted or sent before the click.
+ */
+async function checkWriting(): Promise<TextEstimateOutcome> {
+  let text: string;
+  if (typeof chrome === "undefined" || !chrome.scripting?.executeScript) {
+    // Development preview: `?pageText=` stands in for the page.
+    text = new URLSearchParams(location.search).get("pageText") ?? "";
+  } else {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return { kind: "cant_inspect" };
+    try {
+      const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractMainText, args: [MAX_CHARS] });
+      if (!injection?.result) return { kind: "cant_inspect" };
+      text = injection.result.text;
+    } catch {
+      return { kind: "cant_inspect" };
+    }
+  }
+  return requestTextEstimate(API_BASE, text);
+}
+
+function renderWriting(outcome: TextEstimateOutcome) {
+  const display = describeTextEstimate(outcome);
+  const box = $("writing-result");
+  box.dataset.tone = display.tone;
+  box.hidden = false;
+  $("writing-title").textContent = display.title;
+  const rationale = $("writing-rationale");
+  // Model output: textContent only, and marked as the model's reasoning.
+  rationale.textContent = display.rationale ? `Why: ${display.rationale}` : "";
+  rationale.hidden = !display.rationale;
+  $("writing-details").replaceChildren(
+    ...display.details.map((detail) => {
+      const li = document.createElement("li");
+      li.textContent = detail;
+      return li;
+    }),
+  );
+}
+
+function setupWritingCheck() {
+  const button = $<HTMLButtonElement>("writing-button");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Checking…";
+    try {
+      renderWriting(await checkWriting());
+    } finally {
+      button.disabled = false;
+      button.textContent = "Check again";
+    }
+  });
+}
+
 let widgetCheckStarted = false;
 
 function setupTabs() {
@@ -157,6 +217,7 @@ function setupTabs() {
 
 async function main() {
   setupTabs();
+  setupWritingCheck();
   $("issuer").textContent = new URL(API_BASE).host;
 
   const target = domainFromTabUrl(await activeTabUrl());

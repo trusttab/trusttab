@@ -539,6 +539,53 @@ rather than silently changing direction.
   (`?next=`, validated by `safeNextPath` against open redirects and auth-page
   loops, and carried through sign-up and the email-verification link).
 
+- **2026-09-15 — Extension AI Check, 2b: AI-written text estimate.**
+  - **Server-side model call only:** the extension posts extracted text to
+    `POST /api/ai-check/text`, and TrustTab calls Claude with its own
+    `ANTHROPIC_API_KEY`. The extension holds no key. The prompt is fixed and
+    the output is forced through a `report_estimate` tool (assessment enum +
+    one-sentence rationale), so the endpoint can't be used as a general model
+    proxy. Model: `claude-haiku-4-5-20251001` (owner decision; override with
+    `AI_TEXT_MODEL`), `temperature: 0`, `max_tokens: 300`.
+  - **Explicit action for sending content:** widget detection (2a) still
+    runs locally when the tab opens. The writing estimate runs only from its
+    own "Check this page's writing" button, with a disclosure next to it.
+    Extraction: `<main>`/`[role=main]`, else a single `<article>`, else
+    `<body>`, skipping nav/header/footer/aside/form/button and
+    `display:none`/`visibility:hidden`. Opacity is deliberately not
+    checked: leasetab.com keeps ~75% of its text at opacity 0 for
+    scroll-reveal animations. Sends at most 12,000 characters (about 2,000
+    words) and only the text, no URL, title or cookies. Under 150 words is
+    answered locally and nothing is sent.
+  - **No retention:** no traffic-log row, and the text and request are never
+    logged. `capabilities.test.ts` checks the import graph can't reach
+    signing/publishing, write tables or log the text. Anthropic's API
+    retention terms still apply.
+  - **Labels** (`src/lib/ai-text/display.ts`, shared with the extension):
+    "Likely AI-written (estimate)", "Can't tell (estimate)", "Likely
+    human-written (estimate)". A test checks every model result carries
+    "(estimate)" plus the caveat "AI-text detection is often wrong. Don't use
+    this to judge or accuse anyone." It is styled weaker than 2a (dashed, no
+    fill).
+  - **Bias, pinned by `src/lib/ai-text/prompt.test.ts`:** wrongly labeling
+    human writing as AI-written is the worse mistake. Style alone never
+    justifies likely_ai, and weak, mixed or ambiguous evidence is "unclear".
+    Page text is wrapped in `<page_text>` as untrusted data (it can't close
+    the tag). A page can still try to steer its own estimate; that's
+    accepted, given the estimate labeling.
+  - **Limits** (owner-approved), via the shared Postgres limiter: 10/hour and
+    30/day per IP, then a global 1,000/day budget (`AI_TEXT_DAILY_CAP`,
+    returns 503). New `enforcePaidRateLimits` fails closed, rejecting
+    requests with no client IP, unlike the free public endpoints. The owner
+    sets a monthly spend limit in the Anthropic Console as the backstop.
+  - **Limiter fixes found while planning:** buckets now store `expires_at`
+    (migration 0009), and pruning deletes expired rows. Previously every row
+    older than an hour was deleted, which would have silently reset day-long
+    windows. The column has a default so code deployed before the migration
+    keeps working during a deploy.
+  - The Web Store listing will need a privacy policy covering 2b before
+    publishing. 2c (images) is not started.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon

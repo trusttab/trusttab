@@ -45,9 +45,23 @@
           Checked inside this page, in your browser, only because you opened this tab. Nothing is sent anywhere. Not part
           of TrustTab verification.
         </p>
-        <div class="ai-soon">
-          <h2>Coming later</h2>
-          <p>An estimate of whether the page's text is AI-generated, always labeled as an estimate.</p>
+
+        <!--
+          2b sends page text off the device, so it is a separate, explicit action
+          and never runs just because the tab was opened.
+        -->
+        <div class="ai-writing">
+          <h2>Writing estimate</h2>
+          <p class="ai-writing-disclosure">
+            Sends up to about 2,000 words of this page's main text (no address or title) to TrustTab, which asks
+            Anthropic's Claude for an estimate. TrustTab doesn't store the text.
+          </p>
+          <button type="button" id="writing-button">Check this page's writing</button>
+          <div id="writing-result" class="writing-result" data-tone="notice" aria-live="polite" hidden>
+            <h3 id="writing-title"></h3>
+            <p id="writing-rationale" class="writing-rationale" hidden></p>
+            <ul id="writing-details"></ul>
+          </div>
         </div>
       </section>
     </main>

@@ -238,20 +238,69 @@ main {
   overflow-wrap: anywhere;
 }
 
-.ai-soon {
+/*
+ * The writing estimate is a model judgment, so it reads weaker than the widget
+ * check above (a fact): dashed outline, no fill, muted text.
+ */
+.ai-writing {
   margin-top: 12px;
-  border: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.ai-writing h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.ai-writing-disclosure {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+#writing-button {
+  appearance: none;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--ai-edge);
+  background: var(--bg);
+  color: var(--ai-fg);
+  cursor: pointer;
+}
+
+#writing-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.writing-result {
+  margin-top: 10px;
+  border: 1px dashed var(--ai-edge);
   border-radius: 8px;
   padding: 8px 12px;
 }
 
-.ai-soon h2 {
-  margin: 0 0 2px;
+.writing-result[data-tone="notice"] {
+  border-color: var(--border);
+}
+
+.writing-result h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.writing-rationale {
+  margin: 0 0 4px;
   font-size: 12px;
 }
 
-.ai-soon p {
+.writing-result ul {
   margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
   color: var(--muted);
-  font-size: 12px;
 }

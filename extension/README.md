@@ -27,7 +27,16 @@ verified by TrustTab.
     involved. "None found" names how many providers were checked and doesn't
     claim the page has no AI.
 
-  An estimate of AI-generated text is planned and not built.
+  - **Writing estimate** is a separate button, **Check this page's writing**.
+    Only when you click it, the popup reads the page's main text (the
+    `<main>`/`<article>` if there is one, without navigation, headers,
+    footers, sidebars, forms, buttons or hidden text), up to about 2,000
+    words, and sends that text alone to TrustTab. TrustTab asks Anthropic's
+    Claude for an estimate. The result is always one of **Likely AI-written
+    (estimate)**, **Can't tell (estimate)** or **Likely human-written
+    (estimate)**, with the model's one-sentence reason and a warning that
+    AI-text detection is often wrong. Pages with under 150 words get "Not
+    enough text to estimate" and nothing is sent.
 
 ## Privacy and permissions
 
@@ -39,6 +48,12 @@ verified by TrustTab.
 - The widget check runs only when you open the **AI Check** tab. It reads
   script/iframe addresses and a list of element selectors, returns hostnames
   and matched selectors to the popup, and makes **no network requests**.
+- The writing estimate is the only feature that sends page content off your
+  device, and only when you click its button. It sends the extracted text
+  without the page address or title, and without cookies. TrustTab doesn't
+  log or store the text. Anthropic processes it under its commercial
+  API terms, including its data retention policy. Checks
+  are rate-limited per IP address (10 per hour, 30 per day).
 - The extension sends that tab's domain to TrustTab **only when you open the
   popup**. It does not watch your browsing, run on the pages you visit, or
   send anything in the background.
@@ -106,6 +121,8 @@ extension/
   src/lookup.ts      tab URL → domain; calls GET /api/verify/by-domain/:domain
   src/widget-signatures.ts  the list of known chat / AI agent widgets
   src/widgets.ts     in-page evidence collector, matching, AI Check wording
+  src/text-extract.ts  in-page main-text extraction (run on click only)
+  src/text-estimate.ts calls POST /api/ai-check/text; wording is in src/lib/ai-text/display.ts
   build.mjs          esbuild bundle → dist/
   make-icons.mjs     generates icons/ (no image dependencies)
   preview.mjs        serves dist/ for popup development
