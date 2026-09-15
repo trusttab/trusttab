@@ -521,7 +521,7 @@ rather than silently changing direction.
   script/iframe/resource hostnames and which known selectors match, and the
   popup matches them against `extension/src/widget-signatures.ts`, the single
   extendable provider list. There are no network calls.
-  - **Deviation from the spec's wording:** "AI agent widget detected" is used
+  - **Deviation from the spec's wording (confirmed by the owner):** "AI agent widget detected" is used
     only for AI-native products. Live-chat vendors that sell AI add-ons
     (Intercom, Zendesk, …) are labeled "Chat widget detected" with a note
     that AI use isn't visible from the page, because stating AI as fact there
@@ -529,8 +529,8 @@ rather than silently changing direction.
   - Signatures were checked against live vendor sites. That caught false
     positives from shared vendor hosts (`static.zdassets.com`,
     `js.usemessages.com`, `www.chatbase.co`), which now match only on the
-    widget's own snippet or elements. Six entries are from embed docs and
-    not yet confirmed live.
+    widget's own snippet or elements. Six entries are only doc-verified; see
+    open questions.
   - 2b (LLM text estimate) and 2c are not started; they need a check-in.
 - **2026-09-15 — Malformed percent-encoding returns 400** in `src/proxy.ts`.
   Vercel's edge already rejects these in production. The proxy covers local
@@ -578,6 +578,10 @@ publish.
 - Manifests published before the self-attestation fields existed are served
   as-is until their next re-check, and they don't validate against the
   current schema. Only leasetab.com's is affected.
+- Extension widget signatures: Crisp, Drift, HubSpot chat, Freshchat,
+  Voiceflow and Ada are verified only against their embed documentation, not
+  live-tested, because their own sites don't run their standard widget.
+  Eventually live-test each against a real customer site. Not urgent.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.
