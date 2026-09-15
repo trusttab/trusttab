@@ -514,6 +514,31 @@ rather than silently changing direction.
   - The build URL is configurable (`TRUSTTAB_URL`) and defaults to
     production. Chrome Web Store publishing is not done.
 
+- **2026-09-15 — Extension AI Check, 2a: widget detection only.** Adds
+  `scripting` to the extension's permissions (still no host permissions or
+  content scripts). When the user opens the AI Check tab, a self-contained
+  collector runs in the active tab's main frame (isolated world). It returns
+  script/iframe/resource hostnames and which known selectors match, and the
+  popup matches them against `extension/src/widget-signatures.ts`, the single
+  extendable provider list. There are no network calls.
+  - **Deviation from the spec's wording:** "AI agent widget detected" is used
+    only for AI-native products. Live-chat vendors that sell AI add-ons
+    (Intercom, Zendesk, …) are labeled "Chat widget detected" with a note
+    that AI use isn't visible from the page, because stating AI as fact there
+    would overclaim.
+  - Signatures were checked against live vendor sites. That caught false
+    positives from shared vendor hosts (`static.zdassets.com`,
+    `js.usemessages.com`, `www.chatbase.co`), which now match only on the
+    widget's own snippet or elements. Six entries are from embed docs and
+    not yet confirmed live.
+  - 2b (LLM text estimate) and 2c are not started; they need a check-in.
+- **2026-09-15 — Malformed percent-encoding returns 400** in `src/proxy.ts`.
+  Vercel's edge already rejects these in production. The proxy covers local
+  and self-hosted deployments, where Next.js responded 500.
+- **2026-09-15 — Login returns to the page the user was headed to**
+  (`?next=`, validated by `safeNextPath` against open redirects and auth-page
+  loops, and carried through sign-up and the email-verification link).
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon

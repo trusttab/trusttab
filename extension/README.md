@@ -13,13 +13,32 @@ verified by TrustTab.
     verification expired. If a check found content that could mislead AI
     agents, the popup says so explicitly.
   - **Not verified** (grey): no information. This is neutral, never a warning.
-- **AI Check**: coming soon. It is a separate feature, deliberately kept apart
-  from verification.
+- **AI Check** is a separate feature, deliberately kept apart from
+  verification (its own violet styling, never green/blue/yellow). Today it
+  detects chat and AI agent widgets on the page:
+  - **AI agent widget detected: [name]** for AI-native products (Chatbase,
+    Voiceflow, Botpress, Ada).
+  - **Chat widget detected: [name]** for chat and help-desk tools whose vendors
+    offer AI agents (Intercom, Drift, Zendesk, Crisp, Tidio, HubSpot chat,
+    LiveChat, Freshchat, Tawk.to). The popup says that whether AI answers can't
+    be seen from the page, rather than claiming it does.
+  - Each result lists the exact script host or page element that matched.
+    This is pattern matching, stated as fact, with no model or estimate
+    involved. "None found" names how many providers were checked and doesn't
+    claim the page has no AI.
+
+  An estimate of AI-generated text is planned and not built.
 
 ## Privacy and permissions
 
-- The only permission is **`activeTab`**, which lets the popup read the
-  address of the tab you're on, and only after you click the toolbar button.
+- Permissions are **`activeTab`** and **`scripting`**. `activeTab` gives the
+  popup the address of the tab you're on, and only after you click the toolbar
+  button. `scripting` lets it run the widget check in that tab, which
+  `activeTab` also limits to the tab you clicked on. There are no host
+  permissions and no content scripts.
+- The widget check runs only when you open the **AI Check** tab. It reads
+  script/iframe addresses and a list of element selectors, returns hostnames
+  and matched selectors to the popup, and makes **no network requests**.
 - The extension sends that tab's domain to TrustTab **only when you open the
   popup**. It does not watch your browsing, run on the pages you visit, or
   send anything in the background.
@@ -69,14 +88,24 @@ The popup's status wording lives in `src/lib/registry-display.ts` in the main
 app, and domain handling in `src/lib/domain.ts`, both shared with the server so
 the two can't drift apart.
 
+## Adding a chat or AI widget provider
+
+Append an entry to `src/widget-signatures.ts`. That list is the only place
+providers are defined. Use hosts only if loading anything from them means the
+widget is installed. If the vendor's host also serves other files (Zendesk's
+`static.zdassets.com`, HubSpot's `js.usemessages.com`), use an element or
+`script[src*=…]` selector instead. `npm test` checks the list's shape.
+
 ## Layout
 
 ```
 extension/
-  manifest.json      MV3 manifest (activeTab only)
+  manifest.json      MV3 manifest (activeTab + scripting)
   popup.html/.css    popup UI
   src/popup.ts       reads the active tab, renders the result
   src/lookup.ts      tab URL → domain; calls GET /api/verify/by-domain/:domain
+  src/widget-signatures.ts  the list of known chat / AI agent widgets
+  src/widgets.ts     in-page evidence collector, matching, AI Check wording
   build.mjs          esbuild bundle → dist/
   make-icons.mjs     generates icons/ (no image dependencies)
   preview.mjs        serves dist/ for popup development

@@ -35,12 +35,19 @@
       </section>
 
       <section id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
+        <div id="ai-card" class="ai-card" data-state="loading" aria-live="polite" aria-busy="true">
+          <p class="ai-kicker">AI Check · chat &amp; AI agent widgets</p>
+          <h1 id="ai-title">Inspecting this page…</h1>
+          <p id="ai-summary"></p>
+          <ul id="ai-detections" hidden></ul>
+        </div>
+        <p class="privacy">
+          Checked inside this page, in your browser, only because you opened this tab. Nothing is sent anywhere. Not part
+          of TrustTab verification.
+        </p>
         <div class="ai-soon">
-          <h1>AI Check: coming soon</h1>
-          <p>
-            A separate check for signs of AI chat widgets and AI-generated content on a page. It is not part of
-            TrustTab verification, and its estimates will always be labeled as estimates.
-          </p>
+          <h2>Coming later</h2>
+          <p>An estimate of whether the page's text is AI-generated, always labeled as an estimate.</p>
         </div>
       </section>
     </main>

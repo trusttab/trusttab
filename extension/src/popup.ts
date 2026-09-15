@@ -1,6 +1,8 @@
 import { describeLookup, type LookupOutcome } from "@/lib/registry-display";
 
 import { domainFromTabUrl, lookupDomain } from "./lookup";
+import { WIDGET_SIGNATURES } from "./widget-signatures";
+import { collectPageEvidence, describeWidgetCheck, detectWidgets, selectorsFor, type WidgetCheckOutcome } from "./widgets";
 
 /** TrustTab instance to query; set at build time (see extension/build.mjs). */
 declare const __TRUSTTAB_URL__: string;
@@ -70,6 +72,72 @@ function render(domain: string | null, outcome: LookupOutcome) {
   links.hidden = items.length === 0;
 }
 
+/**
+ * AI Check, widget detection. Runs the collector in the active tab only when
+ * the user opens this tab (`activeTab` + `scripting`), and matches the result
+ * here in the popup. No network requests: nothing about the page leaves the
+ * browser.
+ */
+async function checkWidgets(): Promise<WidgetCheckOutcome> {
+  const result = (evidence: Parameters<typeof detectWidgets>[0]): WidgetCheckOutcome => ({
+    kind: "result",
+    detections: detectWidgets(evidence, WIDGET_SIGNATURES),
+    providersChecked: WIDGET_SIGNATURES.length,
+  });
+
+  if (typeof chrome === "undefined" || !chrome.scripting?.executeScript) {
+    // Development preview: `?widgetHosts=a.example,b.example` stands in for page evidence.
+    const hosts = new URLSearchParams(location.search).get("widgetHosts");
+    return hosts === null ? { kind: "preview" } : result({ hosts: hosts.split(","), matchedSelectors: [] });
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return { kind: "unavailable" };
+  try {
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: collectPageEvidence,
+      args: [selectorsFor(WIDGET_SIGNATURES)],
+    });
+    return injection?.result ? result(injection.result) : { kind: "unavailable" };
+  } catch {
+    // Chrome refuses injection into some pages (Web Store, other extensions, error pages).
+    return { kind: "unavailable" };
+  }
+}
+
+function renderWidgetCheck(outcome: WidgetCheckOutcome) {
+  const display = describeWidgetCheck(outcome);
+  const card = $("ai-card");
+  card.dataset.state = outcome.kind === "result" && outcome.detections.length > 0 ? "found" : "clear";
+  card.setAttribute("aria-busy", "false");
+  $("ai-title").textContent = display.title;
+  $("ai-summary").textContent = display.summary;
+
+  const list = $("ai-detections");
+  list.replaceChildren(
+    ...display.items.map((item) => {
+      const li = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      li.append(title);
+      if (item.note) {
+        const note = document.createElement("p");
+        note.textContent = item.note;
+        li.append(note);
+      }
+      const evidence = document.createElement("p");
+      evidence.className = "evidence";
+      evidence.textContent = `Found: ${item.evidence.join("; ")}`;
+      li.append(evidence);
+      return li;
+    }),
+  );
+  list.hidden = display.items.length === 0;
+}
+
+let widgetCheckStarted = false;
+
 function setupTabs() {
   const tabs = document.querySelectorAll<HTMLButtonElement>("[role=tab]");
   for (const tab of tabs) {
@@ -78,6 +146,10 @@ function setupTabs() {
         const selected = other === tab;
         other.setAttribute("aria-selected", String(selected));
         $(other.getAttribute("aria-controls")!).hidden = !selected;
+      }
+      if (tab.id === "tab-ai" && !widgetCheckStarted) {
+        widgetCheckStarted = true;
+        void checkWidgets().then(renderWidgetCheck);
       }
     });
   }
