@@ -13,22 +13,10 @@ import { db } from "@/db";
 import { sites } from "@/db/schema";
 import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
+import { getAssistantChanges, getOrCreateDraft } from "@/lib/drafts";
+import { manifestToInput } from "@/lib/manifest/input";
 import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
-import type { Manifest, ManifestInput } from "@/lib/manifest/types";
 import { verificationSnippet } from "@/lib/ownership";
-
-/** Extracts the owner-editable parts of a published manifest to prefill the editor. */
-function toInput(manifest: Manifest): ManifestInput {
-  return {
-    no_prompt_injection_pledge: manifest.policy.no_prompt_injection_pledge,
-    agent_rate_limit: manifest.policy.agent_rate_limit,
-    // verified_by is set by TrustTab, not edited by the owner.
-    endpoints: manifest.endpoints.map(({ verified_by: _verifiedBy, ...endpoint }) => {
-      void _verifiedBy;
-      return endpoint;
-    }),
-  };
-}
 
 export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) {
   const user = await requireUser();
@@ -41,9 +29,15 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     .where(and(eq(sites.id, siteId), eq(sites.userId, user.id)));
   if (!site) notFound();
 
-  const [latest, lastRun, traffic] = site.ownershipVerifiedAt
-    ? await Promise.all([getLatestManifest(site.id), getLatestVerificationRun(site.id), getTraffic(site.id)])
-    : [undefined, undefined, undefined];
+  const [latest, lastRun, traffic, draft, assistantChanges] = site.ownershipVerifiedAt
+    ? await Promise.all([
+        getLatestManifest(site.id),
+        getLatestVerificationRun(site.id),
+        getTraffic(site.id),
+        getOrCreateDraft(site.id),
+        getAssistantChanges(site.id),
+      ])
+    : [undefined, undefined, undefined, undefined, []];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -82,7 +76,16 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
               TRUSTTAB_ISSUER_URL), so manifests can&apos;t be published yet.
             </p>
           )}
-          <ManifestEditor siteId={site.id} initial={latest ? toInput(latest.payloadJson) : null} />
+          {draft && (
+            <ManifestEditor
+              key={`${draft.version}:${draft.hash}`}
+              siteId={site.id}
+              draft={{ input: draft.input, version: draft.version, hash: draft.hash }}
+              published={latest ? manifestToInput(latest.payloadJson) : null}
+              assistantChanges={assistantChanges.map((c) => ({ id: c.id, summary: c.summary, reason: c.reason }))}
+              locked={false}
+            />
+          )}
         </>
       ) : (
         <section className="rounded-lg border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-500">

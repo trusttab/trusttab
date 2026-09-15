@@ -57,6 +57,13 @@
       "when": 1789426031468,
       "tag": "0007_grandfather_email_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789435584480,
+      "tag": "0008_assistant_drafts",
+      "breakpoints": true
     }
   ]
 }

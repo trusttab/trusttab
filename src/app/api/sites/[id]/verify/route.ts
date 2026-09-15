@@ -9,6 +9,7 @@ import { getLatestManifest } from "@/lib/manifest/queries";
 import { getPublicJwks, signManifest } from "@/lib/manifest/signing";
 import { insertManifestVersion } from "@/lib/manifest/store";
 import { validateManifest } from "@/lib/manifest/validate";
+import { sameOriginBrowserRequestError } from "@/lib/same-origin";
 import { runVerification } from "@/lib/verification/engine";
 
 // Up to 50 endpoint pages plus the homepage and well-known manifest are fetched.
@@ -32,7 +33,13 @@ const COOLDOWN_MS = 20_000;
  * the outcome (`site.verified_at`, `content_scan`, fresh expiry), so the
  * public manifest never claims more than the latest run established.
  */
-export async function POST(_request: Request, ctx: RouteContext<"/api/sites/[id]/verify">) {
+export async function POST(request: Request, ctx: RouteContext<"/api/sites/[id]/verify">) {
+  // This route re-signs the manifest, so like publishing it only accepts
+  // same-origin requests from the dashboard. The assistant's preview checks
+  // use a separate, non-signing path (src/lib/assistant).
+  const originError = sameOriginBrowserRequestError(request);
+  if (originError) return jsonError(403, originError);
+
   const user = await getApiUser();
   if (!user) return jsonError(401, "Sign in first.");
 

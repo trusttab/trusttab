@@ -15,6 +15,12 @@ export async function getApiUser() {
   return session?.user ?? null;
 }
 
+/** Returns the signed-in user and their session for an API route, or null. */
+export async function getApiSession() {
+  const session = await getSession();
+  return session ? { user: session.user, sessionId: session.session.id } : null;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: string) => UUID_RE.test(value);
 

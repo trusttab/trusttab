@@ -31,7 +31,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // Relative (not "@/") because drizzle-kit loads this file outside Next.js.
-import type { Manifest } from "../lib/manifest/types";
+import type { Manifest, ManifestInput } from "../lib/manifest/types";
 import type { VerificationResults } from "../lib/verification/types";
 
 // ---------------------------------------------------------------------------
@@ -179,6 +179,63 @@ export const manifests = pgTable(
   },
   (t) => [uniqueIndex("manifests_site_version_uniq").on(t.siteId, t.version)],
 );
+
+/**
+ * The work-in-progress manifest for a site: what the editor shows and what
+ * both the owner and the dashboard assistant edit. Nothing here is public or
+ * signed. Publishing signs *this* row, identified by its content hash, and only
+ * through the human publish flow (src/lib/publish-gate.ts).
+ */
+export const manifestDrafts = pgTable("manifest_drafts", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => sites.id, { onDelete: "cascade" }),
+  inputJson: jsonb("input_json").$type<ManifestInput>().notNull(),
+  /** Incremented on every save; writers must name the version they edited. */
+  version: integer("version").notNull().default(1),
+  updatedBy: text("updated_by").$type<"owner" | "assistant">().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Changes the assistant made to a draft since the last publish, with its
+ * stated reason. Shown to the owner before they can publish; cleared on publish.
+ */
+export const draftChanges = pgTable(
+  "draft_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    actor: text("actor").$type<"assistant">().notNull(),
+    summary: text("summary").notNull(),
+    reason: text("reason").notNull(),
+    /** Draft version this change produced. */
+    draftVersion: integer("draft_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("draft_changes_site_created_idx").on(t.siteId, t.createdAt)],
+);
+
+/**
+ * Single-use, short-lived confirmations for publishing. Issued to a signed-in
+ * browser session for one exact draft (by hash), consumed by the publish
+ * request. Only the SHA-256 of the confirmation token is stored.
+ */
+export const publishConfirmations = pgTable("publish_confirmations", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull(),
+  siteId: uuid("site_id")
+    .notNull()
+    .references(() => sites.id, { onDelete: "cascade" }),
+  draftHash: text("draft_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+});
 
 /** One row per "Re-check now": the outcome of every verification check. */
 export const verificationRuns = pgTable(
