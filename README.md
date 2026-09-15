@@ -282,6 +282,7 @@ npm run dev                  # http://localhost:3000
 | `TRUSTTAB_SIGNING_PRIVATE_KEY` | Ed25519 signing key. Generate with `npm run keys:generate` and back it up |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification and password reset email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification and password reset** (with a startup warning) |
 | `ANTHROPIC_API_KEY`, `ASSISTANT_MODEL` | *Optional.* Enables the dashboard assistant (default model `claude-sonnet-5`) |
+| `AI_TEXT_MODEL`, `AI_TEXT_DAILY_CAP` | *Optional.* The extension's AI-written text estimate, which also needs `ANTHROPIC_API_KEY` (defaults `claude-haiku-4-5-20251001`, 1000 checks/day across all clients) |
 | `AGENTTRUST_VERIFY_TOKEN` | *Optional.* Makes this deployment publish its own verification tag so it can claim its own domain |
 
 ### Deploying to Vercel

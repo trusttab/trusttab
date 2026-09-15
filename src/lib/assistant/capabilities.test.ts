@@ -113,3 +113,28 @@ describe("dashboard assistant capabilities", () => {
     assert.doesNotMatch(source, /body\.(endpoints|input|manifest)/);
   });
 });
+
+describe("AI text estimate capabilities", () => {
+  const AI_TEXT_DIR = path.join(SRC, "lib/ai-text");
+  const entries = [
+    ...readdirSync(AI_TEXT_DIR)
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .map((f) => path.join(AI_TEXT_DIR, f)),
+    path.join(SRC, "app/api/ai-check/text/route.ts"),
+  ];
+
+  test("its import graph never reaches code that signs or publishes", () => {
+    const graph = importGraph(entries);
+    const reached = FORBIDDEN.filter((f) => graph.has(f)).map((f) => path.relative(SRC, f));
+    assert.deepEqual(reached, [], `AI text code can reach: ${reached.join(", ")}`);
+  });
+
+  test("page text is never written to the traffic log or other tables", () => {
+    for (const file of importGraph(entries)) {
+      if (file.endsWith("lib/rate-limit.ts") || file.endsWith("db/index.ts") || file.endsWith("db/schema.ts") || file.endsWith("lib/ip.ts")) continue;
+      const source = readFileSync(file, "utf8");
+      assert.doesNotMatch(source, /recordHit|manifestHits|db\.insert|db\.update|console\.\w+\([^)]*[,(]\s*(text|rawText|raw|body|request)\b/, path.relative(SRC, file));
+    }
+  });
+});
+
