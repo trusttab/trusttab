@@ -497,10 +497,16 @@ rather than silently changing direction.
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
 Postgres, auto-deploys from `main`). The full loop works end to end: claim →
 ownership → signed manifest → checks → registry/badge/traffic log. The first
-real domain, leasetab.com (Base44), is verified for ownership and passes the
-injection scan and HTTPS. To finish, it needs the
-`<meta name="agent-trust-manifest">` tag, a self-attested `/contact`
-endpoint and a republish; it should then reach `self_declared`.
+real domain, leasetab.com (Base44), has proven the full loop including
+self-attestation and is `self_declared`.
+
+Post-build additions, all live: account email verification, password reset
+and change, and deletion (email sending is off until a Resend key and domain
+are configured), Postgres-backed rate limiting, and the dashboard assistant.
+The assistant was verified with the live model on leasetab.com: it drafts
+only from real forms, reports JS-rendered forms as "probably built by
+JavaScript" with the observed signals, never guesses fields, and cannot
+publish.
 
 ## Open questions
 
