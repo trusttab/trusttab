@@ -5,7 +5,8 @@ import { describe, test } from "node:test";
 import { buildManifest, generateVerificationId } from "./build";
 import { canonicalize } from "./canonical-json";
 import { fieldsToText, textToFields } from "./fields-text";
-import { getPublicJwks, signManifest, verifyManifestSignature } from "./signing";
+import { verifyManifestSignature } from "./signature-verify";
+import { getPublicJwks, signManifest } from "./signing";
 import type { Manifest, ManifestInput } from "./types";
 import { validateManifest } from "./validate";
 

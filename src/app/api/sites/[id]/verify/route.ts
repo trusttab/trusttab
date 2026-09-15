@@ -6,7 +6,7 @@ import { sites, verificationRuns } from "@/db/schema";
 import { getApiUser, isUniqueViolation, isUuid, jsonError } from "@/lib/api";
 import { reissueManifest } from "@/lib/manifest/build";
 import { getLatestManifest } from "@/lib/manifest/queries";
-import { signManifest } from "@/lib/manifest/signing";
+import { getPublicJwks, signManifest } from "@/lib/manifest/signing";
 import { insertManifestVersion } from "@/lib/manifest/store";
 import { validateManifest } from "@/lib/manifest/validate";
 import { runVerification } from "@/lib/verification/engine";
@@ -64,6 +64,7 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/sites/[id]
     domain: site.domain,
     verificationId: site.verificationId,
     manifest: latest.payloadJson,
+    jwks: getPublicJwks(),
   });
 
   const scanCheck = outcome.results.checks.find((c) => c.id === "injection_scan")!;

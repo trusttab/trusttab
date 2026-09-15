@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getIssuer } from "@/lib/manifest/build";
-import { getPublicJwks } from "@/lib/manifest/signing";
+import type { Ed25519Jwk } from "@/lib/manifest/signature-verify";
 import type { Manifest } from "@/lib/manifest/types";
 import { safeFetchText, type SafeFetchResult } from "@/lib/safe-fetch";
 import { fetchSitePage, isSameSite } from "@/lib/site-fetch";
@@ -15,6 +15,11 @@ import type { CheckDetail, CheckResult, VerificationResults } from "./types";
 
 export const WELL_KNOWN_PATH = "/.well-known/agent-trust.json";
 const FETCH_CONCURRENCY = 4;
+
+/** The parts of a manifest the checks read: just the declared endpoints. */
+export type CheckableManifest = {
+  endpoints: Pick<Manifest["endpoints"][number], "path" | "method" | "schema" | "self_attested">[];
+};
 
 export type VerificationOutcome = {
   results: VerificationResults;
@@ -36,9 +41,16 @@ export type VerificationOutcome = {
 export async function runVerification(args: {
   domain: string;
   verificationId: string;
-  manifest: Manifest;
+  manifest: CheckableManifest;
+  /**
+   * The issuer's public keys, used to check the served manifest's signature.
+   * Passed in rather than read from the signing module, so callers that must
+   * never touch the signing key (the assistant's dry run) can supply the
+   * public JWKS they fetched like any outside verifier.
+   */
+  jwks: { keys: Ed25519Jwk[] };
 }): Promise<VerificationOutcome> {
-  const { domain, verificationId, manifest } = args;
+  const { domain, verificationId, manifest, jwks } = args;
 
   const paths = [...new Set(["/", ...manifest.endpoints.map((e) => e.path)])];
   const pages = new Map<string, { url: string; result: SafeFetchResult }>();
@@ -47,7 +59,7 @@ export async function runVerification(args: {
     pages.set(path, { url: result.ok ? result.finalUrl : requestedUrl, result });
   });
 
-  const discovery = await discoverServedManifest(domain, verificationId, pages.get("/")!);
+  const discovery = await discoverServedManifest(domain, verificationId, pages.get("/")!, jwks);
 
   const endpointCheck = checkEndpoints(manifest, pages);
   const { check: injectionCheck, detected } = checkInjection(pages);
@@ -63,7 +75,7 @@ export async function runVerification(args: {
   };
 }
 
-function checkEndpoints(manifest: Manifest, pages: Map<string, { url: string; result: SafeFetchResult }>): CheckResult {
+function checkEndpoints(manifest: CheckableManifest, pages: Map<string, { url: string; result: SafeFetchResult }>): CheckResult {
   const details: CheckDetail[] = manifest.endpoints.map((endpoint) => {
     const subject = `${endpoint.method} ${endpoint.path}`;
     const { url, result } = pages.get(endpoint.path)!;
@@ -164,6 +176,7 @@ async function discoverServedManifest(
   domain: string,
   verificationId: string,
   homepage: { url: string; result: SafeFetchResult },
+  jwks: { keys: Ed25519Jwk[] },
 ): Promise<{ checks: [CheckResult, CheckResult]; fetches: SafeFetchResult[] }> {
   const issuerManifestUrl = new URL(`${getIssuer().url}/api/manifest/${domain}`);
   const isIssuerManifestUrl = (url: URL) =>
@@ -175,7 +188,7 @@ async function discoverServedManifest(
     { ...EXPIRY_CHECK, passed: false, message: "Not evaluated: no manifest was found.", details: [] },
   ];
   const evaluate = (body: string, via: string): [CheckResult, CheckResult] => {
-    const verdict = evaluateServedManifest({ body, domain, verificationId, jwks: getPublicJwks() });
+    const verdict = evaluateServedManifest({ body, domain, verificationId, jwks });
     return [
       { ...DOMAIN_CHECK, ...verdict.domainMatch, message: `${verdict.domainMatch.message} (found via ${via})`, details: [] },
       { ...EXPIRY_CHECK, ...verdict.expiry, details: [] },

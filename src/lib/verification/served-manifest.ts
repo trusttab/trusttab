@@ -1,6 +1,6 @@
 import "server-only";
 
-import { verifyManifestSignature, type Ed25519Jwk } from "@/lib/manifest/signing";
+import { verifyManifestSignature, type Ed25519Jwk } from "@/lib/manifest/signature-verify";
 import type { Manifest } from "@/lib/manifest/types";
 
 /**

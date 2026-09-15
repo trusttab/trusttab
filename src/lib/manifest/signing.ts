@@ -1,15 +1,9 @@
 import "server-only";
 
-import {
-  createHash,
-  createPrivateKey,
-  createPublicKey,
-  sign as cryptoSign,
-  verify as cryptoVerify,
-  type KeyObject,
-} from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, type KeyObject } from "node:crypto";
 
 import { canonicalize } from "./canonical-json";
+import type { Ed25519Jwk } from "./signature-verify";
 import type { Manifest, UnsignedManifest } from "./types";
 
 /**
@@ -26,20 +20,15 @@ import type { Manifest, UnsignedManifest } from "./types";
  *
  * The signature lives inside the JSON (not in HTTP headers), so a manifest
  * remains verifiable wherever it's copied or cached.
+ *
+ * This is the only module that loads the private signing key. Verification
+ * lives in ./signature-verify.ts and needs only public keys, so code that must
+ * never sign (the dashboard assistant) can verify without importing this file.
  */
 
 const b64url = (data: Buffer | string) => Buffer.from(data).toString("base64url");
 
 let cachedKey: { privateKey: KeyObject; publicJwk: Ed25519Jwk } | null = null;
-
-export type Ed25519Jwk = {
-  kty: "OKP";
-  crv: "Ed25519";
-  x: string;
-  kid: string;
-  alg: "EdDSA";
-  use: "sig";
-};
 
 /**
  * Loads the issuer's signing key from TRUSTTAB_SIGNING_PRIVATE_KEY
@@ -92,27 +81,4 @@ export function signManifest(unsigned: UnsignedManifest): Manifest {
     ...unsigned,
     site: { ...unsigned.site, signature: `${header}..${b64url(signature)}` },
   };
-}
-
-/**
- * Verifies a manifest's signature against a set of public keys. Returns false
- * for any malformed input rather than throwing.
- */
-export function verifyManifestSignature(manifest: Manifest, jwks: { keys: Ed25519Jwk[] }): boolean {
-  try {
-    const [header, empty, sig] = manifest.site.signature.split(".");
-    if (!header || empty !== "" || !sig) return false;
-
-    const { alg, kid } = JSON.parse(Buffer.from(header, "base64url").toString("utf8"));
-    const jwk = jwks.keys.find((k) => k.kid === kid);
-    if (alg !== "EdDSA" || !jwk) return false;
-
-    const { signature: _omit, ...site } = manifest.site;
-    void _omit;
-    const payload = b64url(canonicalize({ ...manifest, site }));
-    const publicKey = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: jwk.x }, format: "jwk" });
-    return cryptoVerify(null, Buffer.from(`${header}.${payload}`), publicKey, Buffer.from(sig, "base64url"));
-  } catch {
-    return false;
-  }
 }
