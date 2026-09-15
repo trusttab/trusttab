@@ -4,6 +4,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 import {
   countWords,
+  MAX_EVIDENCE_CHARS,
+  MAX_EVIDENCE_ITEMS,
   MAX_RATIONALE_CHARS,
   MIN_WORDS,
   prepareText,
@@ -54,18 +56,67 @@ export async function estimateText(args: {
   );
 
   const call = message.content.find((block): block is Anthropic.ToolUseBlock => block.type === "tool_use" && block.name === REPORT_TOOL.name);
-  const input = call?.input as { assessment?: unknown; rationale?: unknown } | undefined;
+  const input = call?.input as { assessment?: unknown; rationale?: unknown; ai_artifacts?: unknown } | undefined;
   if (!input || !TEXT_ASSESSMENTS.includes(input.assessment as TextAssessment) || typeof input.rationale !== "string") {
     // Never invent a result: a malformed answer is an error, not "unclear".
     throw new InvalidModelOutputError("The model didn't return a valid estimate.");
   }
 
-  return {
-    result: "estimate",
-    assessment: input.assessment as TextAssessment,
-    rationale: cleanRationale(input.rationale),
-    words_analyzed: words,
-  };
+  return applyEvidenceRule(
+    {
+      result: "estimate",
+      assessment: input.assessment as TextAssessment,
+      rationale: cleanRationale(input.rationale),
+      evidence: [],
+      words_analyzed: words,
+    },
+    Array.isArray(input.ai_artifacts) ? input.ai_artifacts : [],
+    text,
+  );
+}
+
+/** Shown when likely_ai is downgraded for lack of a verified artifact; the model's reason argued for AI, so it isn't shown. */
+export const STYLE_ONLY_RATIONALE =
+  "The writing has traits sometimes seen in AI text, but people write this way too, and no direct sign of AI generation was found in the page.";
+
+/**
+ * The bias rule, enforced in code (the prompt states it too): likely_ai
+ * stands only with at least one quoted artifact of AI generation that really
+ * appears in the page text. Otherwise the result is "unclear". Quotes the
+ * model paraphrased or invented don't count. Wrongly calling a person's
+ * writing AI-written is the worse mistake, and a prompt alone didn't hold.
+ *
+ * Limit: code can verify that a quote is on the page, not that it really is
+ * an artifact of AI generation. That part stays the model's judgment, which
+ * is why the result is still labeled an estimate.
+ */
+export function applyEvidenceRule(
+  estimate: Extract<TextEstimateResponse, { result: "estimate" }>,
+  artifacts: unknown[],
+  pageText: string,
+): Extract<TextEstimateResponse, { result: "estimate" }> {
+  if (estimate.assessment !== "likely_ai") return { ...estimate, evidence: [] };
+
+  const haystack = normalizeForQuote(pageText);
+  const verified = artifacts
+    .filter((a): a is string => typeof a === "string")
+    .map((a) => a.replace(/\s+/g, " ").trim())
+    // At least two words, so a single stock word ("seamless") can't stand in for an artifact.
+    .filter((a) => a.length >= 8 && a.length <= MAX_EVIDENCE_CHARS && a.split(" ").length >= 2 && haystack.includes(normalizeForQuote(a)))
+    .slice(0, MAX_EVIDENCE_ITEMS);
+
+  if (verified.length === 0) return { ...estimate, assessment: "unclear", rationale: STYLE_ONLY_RATIONALE, evidence: [] };
+  return { ...estimate, evidence: verified };
+}
+
+function normalizeForQuote(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cleanRationale(value: string): string {

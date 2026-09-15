@@ -173,6 +173,9 @@ function renderWriting(outcome: TextEstimateOutcome) {
   // Model output: textContent only, and marked as the model's reasoning.
   rationale.textContent = display.rationale ? `Why: ${display.rationale}` : "";
   rationale.hidden = !display.rationale;
+  const evidence = $("writing-evidence");
+  evidence.textContent = display.evidence.length ? `Quoted from the page: ${display.evidence.map((q) => `“${q}”`).join(", ")}` : "";
+  evidence.hidden = display.evidence.length === 0;
   $("writing-details").replaceChildren(
     ...display.details.map((detail) => {
       const li = document.createElement("li");

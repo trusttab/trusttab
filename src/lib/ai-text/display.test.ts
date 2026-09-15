@@ -18,11 +18,12 @@ describe("estimate labels", () => {
       assert.match(ESTIMATE_LABELS[assessment], /\(estimate\)$/, assessment);
       const display = describeTextEstimate({
         kind: "response",
-        response: { result: "estimate", assessment, rationale: "Because.", words_analyzed: 400 },
+        response: { result: "estimate", assessment, rationale: "Because.", evidence: ["[Company Name]"], words_analyzed: 400 },
       });
       assert.equal(display.tone, "estimate");
       assert.match(display.title, /\(estimate\)/);
       assert.ok(display.details.some((d) => /often wrong/.test(d)), "caveat shown");
+      assert.deepEqual(display.evidence, assessment === "likely_ai" ? ["[Company Name]"] : [], "evidence only backs likely_ai");
     }
     assert.deepEqual(ESTIMATE_LABELS, {
       likely_ai: "Likely AI-written (estimate)",
@@ -56,6 +57,7 @@ describe("parseTextEstimateResponse", () => {
       result: "estimate",
       assessment: "unclear",
       rationale: "Mixed.",
+      evidence: [],
       words_analyzed: 300,
     });
     assert.equal(parseTextEstimateResponse({ result: "estimate", assessment: "ai", rationale: "x", words_analyzed: 1 }), null);

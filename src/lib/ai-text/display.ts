@@ -20,6 +20,9 @@ export const MIN_WORDS = 150;
 export const MAX_CHARS = 12_000;
 /** Longest rationale shown, in characters. */
 export const MAX_RATIONALE_CHARS = 300;
+/** At most this many quoted artifacts, each at most this long. */
+export const MAX_EVIDENCE_ITEMS = 3;
+export const MAX_EVIDENCE_CHARS = 120;
 
 export function countWords(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
@@ -36,7 +39,14 @@ export function prepareText(text: string): string {
 
 /** Body of a successful `POST /api/ai-check/text` response. */
 export type TextEstimateResponse =
-  | { result: "estimate"; assessment: TextAssessment; rationale: string; words_analyzed: number }
+  | {
+      result: "estimate";
+      assessment: TextAssessment;
+      rationale: string;
+      /** For likely_ai only: quotes from the page, each verified to appear in it. */
+      evidence: string[];
+      words_analyzed: number;
+    }
   | { result: "not_enough_text"; words_analyzed: number };
 
 export function parseTextEstimateResponse(body: unknown): TextEstimateResponse | null {
@@ -49,10 +59,14 @@ export function parseTextEstimateResponse(body: unknown): TextEstimateResponse |
     TEXT_ASSESSMENTS.includes(b.assessment as TextAssessment) &&
     typeof b.rationale === "string"
   ) {
+    const evidence = Array.isArray(b.evidence)
+      ? b.evidence.filter((e): e is string => typeof e === "string").slice(0, MAX_EVIDENCE_ITEMS).map((e) => e.slice(0, MAX_EVIDENCE_CHARS))
+      : [];
     return {
       result: "estimate",
       assessment: b.assessment as TextAssessment,
       rationale: b.rationale.slice(0, MAX_RATIONALE_CHARS),
+      evidence,
       words_analyzed: b.words_analyzed,
     };
   }
@@ -80,6 +94,8 @@ export type TextEstimateDisplay = {
   tone: "estimate" | "notice";
   title: string;
   rationale?: string;
+  /** Quotes from the page, shown as the evidence for likely_ai. */
+  evidence: string[];
   details: string[];
 };
 
@@ -100,12 +116,13 @@ export function describeTextEstimate(outcome: TextEstimateOutcome): TextEstimate
     case "response": {
       const { response } = outcome;
       if (response.result === "not_enough_text") {
-        return { tone: "notice", title: "Not enough text to estimate", details: [`At least ${MIN_WORDS} words are needed.`] };
+        return { tone: "notice", title: "Not enough text to estimate", evidence: [], details: [`At least ${MIN_WORDS} words are needed.`] };
       }
       return {
         tone: "estimate",
         title: ESTIMATE_LABELS[response.assessment],
         rationale: response.rationale,
+        evidence: response.assessment === "likely_ai" ? response.evidence : [],
         details: [wordsLine(response.words_analyzed), ESTIMATE_CAVEAT],
       };
     }
@@ -113,19 +130,21 @@ export function describeTextEstimate(outcome: TextEstimateOutcome): TextEstimate
       return {
         tone: "notice",
         title: "Not enough text to estimate",
+        evidence: [],
         details: [`Found ${outcome.words} words of main text; at least ${MIN_WORDS} are needed. Nothing was sent.`],
       };
     case "rate_limited":
       return {
         tone: "notice",
         title: "Check limit reached",
+        evidence: [],
         details: [`Writing checks are limited to keep the service free. Try again ${waitPhrase(outcome.retryAfterSeconds)}.`],
       };
     case "unavailable":
-      return { tone: "notice", title: "Writing check unavailable", details: [outcome.message ?? "This TrustTab instance can't run writing checks right now."] };
+      return { tone: "notice", title: "Writing check unavailable", evidence: [], details: [outcome.message ?? "This TrustTab instance can't run writing checks right now."] };
     case "cant_inspect":
-      return { tone: "notice", title: "Can't read this page", details: ["Chrome doesn't let extensions read this kind of page. Nothing was sent."] };
+      return { tone: "notice", title: "Can't read this page", evidence: [], details: ["Chrome doesn't let extensions read this kind of page. Nothing was sent."] };
     case "error":
-      return { tone: "notice", title: "Writing check failed", details: ["Couldn't get an estimate. Please try again."] };
+      return { tone: "notice", title: "Writing check failed", evidence: [], details: ["Couldn't get an estimate. Please try again."] };
   }
 }

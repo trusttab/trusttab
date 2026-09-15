@@ -13,8 +13,11 @@ import { pageTextMessage, REPORT_TOOL, TEXT_ESTIMATE_PROMPT } from "./prompt";
 test("the prompt treats wrongly flagging human writing as AI-written as the worse mistake", () => {
   assert.match(TEXT_ESTIMATE_PROMPT, /The two mistakes aren't equally bad/);
   assert.match(TEXT_ESTIMATE_PROMPT, /Wrongly labeling human writing as AI-written is the worse mistake/);
-  assert.match(TEXT_ESTIMATE_PROMPT, /Answer likely_ai only when several strong, specific signals point to AI and nothing clearly points to a person/);
+  assert.match(TEXT_ESTIMATE_PROMPT, /Answer likely_ai only when you can quote at least one direct artifact of AI generation from the page/);
+  assert.match(TEXT_ESTIMATE_PROMPT, /Without one, answer unclear, however AI-like the style seems/);
   assert.match(TEXT_ESTIMATE_PROMPT, /Style alone is never enough for likely_ai/);
+  assert.match(TEXT_ESTIMATE_PROMPT, /Style signals are weak evidence/);
+  assert.match(TEXT_ESTIMATE_PROMPT, /People write this way too, especially in marketing/);
   assert.match(TEXT_ESTIMATE_PROMPT, /When the evidence is weak, mixed or ambiguous, answer unclear/);
   assert.match(TEXT_ESTIMATE_PROMPT, /No method detects AI-written text reliably, including you/);
 });
@@ -24,9 +27,10 @@ test("the prompt never invites a flat verdict or a default of likely_ai", () => 
   assert.doesNotMatch(TEXT_ESTIMATE_PROMPT, /\b(definitely|certainly|proves?) (AI|written by)/i);
 });
 
-test("the output is forced to the three assessments, with unclear available", () => {
-  const schema = REPORT_TOOL.input_schema as { properties: { assessment: { enum: string[] } } };
+test("the output is forced to the three assessments, with unclear available and quoted artifacts required", () => {
+  const schema = REPORT_TOOL.input_schema as { properties: { assessment: { enum: string[] } }; required: string[] };
   assert.deepEqual(schema.properties.assessment.enum, [...TEXT_ASSESSMENTS]);
+  assert.deepEqual(schema.required, ["assessment", "rationale", "ai_artifacts"]);
   assert.ok(TEXT_ASSESSMENTS.includes("unclear"));
 });
 

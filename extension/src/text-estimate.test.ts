@@ -22,7 +22,7 @@ describe("requestTextEstimate", () => {
   });
 
   test("sends only the text, without cookies or referrer", async () => {
-    const { impl, calls } = fakeFetch(200, { result: "estimate", assessment: "likely_human", rationale: "Specific history.", words_analyzed: 190 });
+    const { impl, calls } = fakeFetch(200, { result: "estimate", assessment: "likely_human", rationale: "Specific history.", evidence: [], words_analyzed: 190 });
     const outcome = await requestTextEstimate("https://tt.example", LONG, impl);
     assert.equal(outcome.kind, "response");
     const [{ url, init }] = calls;

@@ -567,9 +567,19 @@ rather than silently changing direction.
     "(estimate)" plus the caveat "AI-text detection is often wrong. Don't use
     this to judge or accuse anyone." It is styled weaker than 2a (dashed, no
     fill).
-  - **Bias, pinned by `src/lib/ai-text/prompt.test.ts`:** wrongly labeling
-    human writing as AI-written is the worse mistake. Style alone never
-    justifies likely_ai, and weak, mixed or ambiguous evidence is "unclear".
+  - **Bias, pinned in the prompt and enforced in code:** wrongly labeling
+    human writing as AI-written is the worse mistake. The first live test
+    showed the prompt alone didn't hold: Haiku called leasetab.com's
+    marketing copy likely_ai on style alone ("templated structure, generic
+    marketing phrases"). So likely_ai now requires the model to quote at
+    least one direct artifact of AI generation (leftover chatbot phrasing,
+    unfilled placeholders, prompt remnants) in `ai_artifacts`.
+    `applyEvidenceRule` keeps likely_ai only if a quote of two or more words
+    appears verbatim in the page text. Otherwise the result is "Can't tell"
+    with a fixed rationale, and the verified quotes are shown as evidence.
+    Code can verify a quote exists, not that it's truly an artifact.
+    Consequence: fluent AI text with no artifacts comes out "Can't tell".
+    `prompt.test.ts` and `estimate.test.ts` pin both halves.
     Page text is wrapped in `<page_text>` as untrusted data (it can't close
     the tag). A page can still try to steer its own estimate; that's
     accepted, given the estimate labeling.
