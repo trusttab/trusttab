@@ -15,7 +15,11 @@ verified by TrustTab.
   - **Not verified** (grey): no information. This is neutral, never a warning.
 - **AI Check** is a separate feature, deliberately kept apart from
   verification (its own violet styling, never green/blue/yellow). Today it
-  detects chat and AI agent widgets on the page:
+  detects AI applications and chat widgets on the page:
+  - **Native AI application detected: [name]** when the page itself is an AI
+    assistant (Claude, ChatGPT, Gemini, Copilot, Perplexity and others),
+    matched on the page's own domain. It identifies the site only, and says
+    nothing about whether any text on the page was written by AI.
   - **AI agent widget detected: [name]** for AI-native products (Chatbase,
     Voiceflow, Botpress, Ada).
   - **Chat widget detected: [name]** for chat and help-desk tools whose vendors
@@ -144,8 +148,11 @@ the two can't drift apart.
 ## Adding a chat or AI widget provider
 
 Append an entry to `src/widget-signatures.ts`. That list is the only place
-providers are defined. Use hosts only if loading anything from them means the
-widget is installed. If the vendor's host also serves other files (Zendesk's
+providers are defined. For an AI application, use `kind: "ai_application"`
+with `pageDomains` (the domains the app itself runs on); it matches the
+page's own address, so visiting another site that merely loads something
+from it never counts. For widgets, use hosts only if loading anything from
+them means the widget is installed. If the vendor's host also serves other files (Zendesk's
 `static.zdassets.com`, HubSpot's `js.usemessages.com`), use an element or
 `script[src*=…]` selector instead. `npm test` checks the list's shape.
 

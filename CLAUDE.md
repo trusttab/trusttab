@@ -606,6 +606,20 @@ rather than silently changing direction.
   - The Web Store listing will need a privacy policy covering 2b before
     publishing. 2c (images) is not started.
 
+- **2026-09-15 — Extension AI Check, 2a addition: AI applications by
+  domain.** A third signature kind in the same list
+  (`extension/src/widget-signatures.ts`): `ai_application`, matched on the
+  page's own hostname via `pageDomains` (the domain or a subdomain of it).
+  Shown as "Native AI application detected: [name]", stated as fact like the
+  rest of 2a, since it is exact domain matching. The label notes it
+  identifies the site only and says nothing about whether text on the page is
+  AI-written, keeping it distinct from the 2b writing estimate. The page's
+  own host is matched only against `pageDomains`, so a site that merely loads
+  a script from an AI app is never reported as one; tests pin that and
+  lookalike domains. Entries (all checked live on 2026-09-15): Claude,
+  ChatGPT, Google Gemini, Google AI Studio, NotebookLM, Microsoft Copilot,
+  Perplexity, Grok, Meta AI, DeepSeek, Mistral Le Chat, Qwen Chat, Poe,
+  Character.AI.
 - **2026-09-15 — Extension AI Check, 2c: image check.** Owner-approved
   plan, with every step triggered by a click:
   - **Flow:** "Find images on this page" lists visible images of at least

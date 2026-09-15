@@ -103,9 +103,17 @@ async function checkWidgets(): Promise<WidgetCheckOutcome> {
   });
 
   if (typeof chrome === "undefined" || !chrome.scripting?.executeScript) {
-    // Development preview: `?widgetHosts=a.example,b.example` stands in for page evidence.
-    const hosts = new URLSearchParams(location.search).get("widgetHosts");
-    return hosts === null ? { kind: "preview" } : result({ hosts: hosts.split(","), matchedSelectors: [] });
+    // Development preview: `?widgetHosts=a.example,b.example` stands in for page
+    // evidence, and the page's own address comes from `?url=`.
+    const params = new URLSearchParams(location.search);
+    const hosts = params.get("widgetHosts");
+    let pageHost = "";
+    try {
+      pageHost = new URL(params.get("url") ?? "").hostname;
+    } catch {
+      pageHost = "";
+    }
+    return hosts === null ? { kind: "preview" } : result({ pageHost, hosts: hosts.split(","), matchedSelectors: [] });
   }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

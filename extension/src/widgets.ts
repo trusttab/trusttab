@@ -7,8 +7,10 @@ import type { WidgetKind, WidgetSignature } from "./widget-signatures";
  * the evidence never leaves the extension.
  */
 
-/** What the injected script reports back: hostnames and matching selectors, nothing else. */
+/** What the injected script reports back: the page's own host, other hostnames and matching selectors. */
 export type PageEvidence = {
+  /** The page's own hostname, for AI application signatures. */
+  pageHost: string;
   /** Hostnames of scripts, iframes and network requests the page loaded. */
   hosts: string[];
   /** Which of the requested CSS selectors matched an element on the page. */
@@ -23,6 +25,7 @@ export type PageEvidence = {
  * hostnames (not full URLs) and matched selectors.
  */
 export function collectPageEvidence(selectors: string[]): PageEvidence {
+  const pageHost = location.hostname.toLowerCase();
   const hosts = new Set<string>();
   const addHost = (value: string | null | undefined) => {
     if (!value) return;
@@ -45,7 +48,7 @@ export function collectPageEvidence(selectors: string[]): PageEvidence {
       return false;
     }
   });
-  return { hosts: [...hosts], matchedSelectors };
+  return { pageHost, hosts: [...hosts], matchedSelectors };
 }
 
 export type WidgetDetection = {
@@ -61,16 +64,23 @@ export function selectorsFor(signatures: WidgetSignature[]): string[] {
   return [...new Set(signatures.flatMap((s) => s.selectors))];
 }
 
+const matchesHost = (host: string, known: string) => host === known || host.endsWith(`.${known}`);
+
 /** Matches page evidence against the signature list. Pure. */
 export function detectWidgets(evidence: PageEvidence, signatures: WidgetSignature[]): WidgetDetection[] {
   const hosts = evidence.hosts.map((h) => h.toLowerCase());
+  const pageHost = (evidence.pageHost ?? "").toLowerCase();
   const selectors = new Set(evidence.matchedSelectors);
   const detections: WidgetDetection[] = [];
 
   for (const signature of signatures) {
     const found: string[] = [];
+    // The page's own address, for AI applications: never other pages' requests to them.
+    for (const known of signature.pageDomains ?? []) {
+      if (pageHost && matchesHost(pageHost, known)) found.push(`this page's own address (${pageHost})`);
+    }
     for (const known of signature.hosts) {
-      const match = hosts.find((h) => h === known || h.endsWith(`.${known}`));
+      const match = hosts.find((h) => matchesHost(h, known));
       if (match) found.push(`script or request from ${match}`);
     }
     for (const selector of signature.selectors) {
@@ -83,6 +93,12 @@ export function detectWidgets(evidence: PageEvidence, signatures: WidgetSignatur
 
 /** The label shown for a detection. Facts only: see WidgetKind. */
 export function detectionLabel(detection: WidgetDetection): { title: string; note?: string } {
+  if (detection.kind === "ai_application") {
+    return {
+      title: `Native AI application detected: ${detection.name}`,
+      note: "This identifies the site only. It doesn't say whether any text on the page was written by AI.",
+    };
+  }
   if (detection.kind === "ai_agent") return { title: `AI agent widget detected: ${detection.name}` };
   return {
     title: `Chat widget detected: ${detection.name}`,
@@ -122,17 +138,21 @@ export function describeWidgetCheck(outcome: WidgetCheckOutcome): WidgetCheckDis
       const { detections, providersChecked } = outcome;
       if (detections.length === 0) {
         return {
-          title: "No known chat or AI agent widgets found",
+          title: "No known AI applications or chat widgets found",
           summary:
-            `Checked for ${providersChecked} known providers. A site can still use one that isn't on the list, ` +
-            "or load a widget only later (for example after you scroll or click).",
+            `Checked this page's address and its scripts against ${providersChecked} known providers. A site can still ` +
+            "use one that isn't on the list, or load a widget only later (for example after you scroll or click).",
           items: [],
         };
       }
+      const apps = detections.filter((d) => d.kind === "ai_application").length;
       const agents = detections.filter((d) => d.kind === "ai_agent").length;
       return {
-        title: agents > 0 ? "AI agent widget on this page" : "Chat widget on this page",
-        summary: "Matched by the scripts and page elements these widgets are known to use.",
+        title: apps > 0 ? "AI application" : agents > 0 ? "AI agent widget on this page" : "Chat widget on this page",
+        summary:
+          apps > 0 && apps === detections.length
+            ? "Matched by this page's own address."
+            : "Matched by this page's address, the scripts it loads, and the elements these widgets add.",
         items: detections.map((d) => ({ ...detectionLabel(d), evidence: d.evidence })),
       };
     }

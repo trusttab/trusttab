@@ -1,5 +1,6 @@
 /**
- * Known chat and AI agent widgets, for the AI Check tab's widget detection.
+ * Known chat and AI agent widgets, and AI applications, for the AI Check
+ * tab's widget detection.
  *
  * This is the only place providers are defined. To add one, append an entry:
  * no other code changes are needed. Keep entries factual and specific. A match
@@ -12,6 +13,11 @@
  * - `kind: "chat_with_ai"`: a chat/help-desk widget whose vendor offers AI
  *   agents. The page can't show whether AI is switched on, so it's shown as
  *   "Chat widget detected" with that caveat.
+ * - `kind: "ai_application"`: the page *is* an AI assistant (claude.ai,
+ *   chatgpt.com...), matched on the page's own domain via `pageDomains`.
+ *   Shown as "Native AI application detected". It identifies the platform
+ *   only; it says nothing about whether any text on the page is AI-written,
+ *   which is what the separate writing estimate is for.
  * - `hosts`: script, iframe or network hosts the widget loads from. A host
  *   matches itself and any subdomain.
  * - `selectors`: CSS selectors for elements the widget adds to the page,
@@ -28,7 +34,7 @@
  * standard widget, so those entries weren't confirmed live.
  */
 
-export type WidgetKind = "ai_agent" | "chat_with_ai";
+export type WidgetKind = "ai_agent" | "chat_with_ai" | "ai_application";
 
 export type WidgetSignature = {
   id: string;
@@ -36,9 +42,40 @@ export type WidgetSignature = {
   kind: WidgetKind;
   hosts: string[];
   selectors: string[];
+  /**
+   * For `ai_application`: domains the app itself is served from, matched
+   * against the page's own address (the domain and its subdomains). Exact
+   * matching, so a result is a fact, like the rest of widget detection.
+   */
+  pageDomains?: string[];
 };
 
 export const WIDGET_SIGNATURES: WidgetSignature[] = [
+  // AI applications, matched on the page's own domain. Domains checked as
+  // live on 2026-09-15.
+  { id: "claude", name: "Claude", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["claude.ai"] },
+  { id: "chatgpt", name: "ChatGPT", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["chatgpt.com", "chat.openai.com"] },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    kind: "ai_application",
+    hosts: [],
+    selectors: [],
+    // bard.google.com still redirects to gemini.google.com.
+    pageDomains: ["gemini.google.com", "bard.google.com"],
+  },
+  { id: "google-ai-studio", name: "Google AI Studio", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["aistudio.google.com"] },
+  { id: "notebooklm", name: "NotebookLM", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["notebooklm.google.com", "notebook.google.com"] },
+  { id: "copilot", name: "Microsoft Copilot", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["copilot.microsoft.com"] },
+  { id: "perplexity", name: "Perplexity", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["perplexity.ai"] },
+  { id: "grok", name: "Grok", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["grok.com"] },
+  { id: "meta-ai", name: "Meta AI", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["meta.ai"] },
+  { id: "deepseek", name: "DeepSeek", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["chat.deepseek.com"] },
+  { id: "mistral", name: "Mistral Le Chat", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["chat.mistral.ai"] },
+  { id: "qwen", name: "Qwen Chat", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["chat.qwen.ai"] },
+  { id: "poe", name: "Poe", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["poe.com"] },
+  { id: "character-ai", name: "Character.AI", kind: "ai_application", hosts: [], selectors: [], pageDomains: ["character.ai"] },
+
   // AI-native chatbots and agents
   {
     id: "chatbase",
