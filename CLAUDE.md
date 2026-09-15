@@ -584,6 +584,8 @@ rather than silently changing direction.
     evidence. Code can verify a quote exists and looks like an artifact, not
     that it truly is one (an article may quote a chatbot).
     Consequence: fluent AI text with no artifacts comes out "Can't tell".
+    The owner confirmed this low-recall tradeoff as final (2026-09-15),
+    given the harm asymmetry.
     `prompt.test.ts`, `estimate.test.ts` and `artifacts.test.ts` pin this,
     including the live-test phrases as regressions. The same page's result
     also moved between prompt versions (leasetab.com: likely_ai, then
