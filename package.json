@@ -35,6 +35,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@contentauth/c2pa-utilities": "0.3.0",
+    "@contentauth/c2pa-wasm": "0.12.0",
     "@tailwindcss/postcss": "^4",
     "@types/chrome": "^0.2.9",
     "@types/node": "^20",

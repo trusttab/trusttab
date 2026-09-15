@@ -594,7 +594,7 @@ rather than silently changing direction.
     the tag). A page can still try to steer its own estimate; that's
     accepted, given the estimate labeling.
   - **Limits** (owner-approved), via the shared Postgres limiter: 10/hour and
-    30/day per IP, then a global 1,000/day budget (`AI_TEXT_DAILY_CAP`,
+    30/day per IP, then a global 1,000/day budget (`AI_CHECK_DAILY_CAP`, shared with 2c,
     returns 503). New `enforcePaidRateLimits` fails closed, rejecting
     requests with no client IP, unlike the free public endpoints. The owner
     sets a monthly spend limit in the Anthropic Console as the backstop.
@@ -605,6 +605,68 @@ rather than silently changing direction.
     keeps working during a deploy.
   - The Web Store listing will need a privacy policy covering 2b before
     publishing. 2c (images) is not started.
+
+- **2026-09-15 — Extension AI Check, 2c: image check.** Owner-approved
+  plan, with every step triggered by a click:
+  - **Flow:** "Find images on this page" lists visible images of at least
+    200px, in page. Picking one reads its bytes and checks provenance
+    locally. "Ask for an estimate" (Tier 2) is a separate button, offered
+    only without verified credentials.
+  - **Reading bytes:** in page first (same origin, CORS, blob:), then a popup
+    fetch if an optional host permission for that image's origin is already
+    granted. Otherwise a "Allow reading images from this site" button calls
+    `chrome.permissions.request` for that one origin. Popup fetches never
+    send cookies.
+  - **Tier 1 runs in the browser (feasibility check done first):**
+    `@contentauth/c2pa-web` 0.15's worker loader requires an `https:` worker
+    URL and otherwise creates a `blob:` worker, and the MV3 extension CSP
+    allows neither. The reader also needs `FileReaderSync` (worker-only). So
+    the extension uses the lower-level `@contentauth/c2pa-wasm` 0.12 in its
+    own module worker (`c2pa-worker.js`), plus the 8.4 MB c2pa-rs
+    WebAssembly file. It was verified under the MV3 default CSP with
+    Trusted, Valid (untrusted signer), Invalid (tampered) and no-manifest
+    test files.
+  - **Trust lists** (committed in `extension/trust/`, refreshed by
+    `extension/update-trust-lists.mjs`): the official C2PA Trust List first.
+    If the signer isn't on it, the interim contentcredentials.org list
+    (anchors, allowed hashes, EKU config), which is labeled as interim and
+    being phased out. Lists can go stale between updates.
+  - **Three visual tiers plus "nothing found"** (owner addition): verified
+    (solid violet edge and fill, filled chip), unverified (hatched edge, no
+    fill, outlined chip; covers untrusted signers, invalid credentials and
+    unsigned metadata), estimate (dashed, dashed chip), and none (plain).
+  - **Verified wording** states who signed and what they state. The popup
+    also says "The signature proves who made these statements and that the
+    file hasn't changed since. It doesn't prove the statements are true."
+    IPTC digital source types map to plain phrases (`trainedAlgorithmicMedia`
+    → "created with generative AI"; `algorithmicMedia` is explicitly "not
+    described as generative AI"). Credentials that don't mention AI say so
+    instead of implying no AI. Invalid credentials say they don't mean the
+    image is AI-generated.
+  - **Unsigned metadata** (owner decision: show it, clearly unverified)
+    comes from an explicit marker list in `extension/src/provenance.ts`:
+    IPTC DigitalSourceType generative-AI codes, Stable Diffusion WebUI
+    parameters, ComfyUI workflows, AI generator names in
+    CreatorTool/Software.
+  - **Tier 2:** `POST /api/ai-check/image`, JPEG body at most 1.5 MB, which
+    the extension downscales to at most 1024px (this also drops metadata).
+    Model `claude-haiku-4-5-20251001` (`AI_IMAGE_MODEL`). There are only two
+    outcomes, "Possibly AI-generated (estimate, no verified metadata found)"
+    and "No clear signs of AI generation (estimate, no verified metadata
+    found)", and it never says "real". `applyArtifactRule` (shared, applied
+    by server and extension) keeps possibly_ai only with a concrete artifact
+    from `VISUAL_ARTIFACTS` (garbled text, malformed anatomy, impossible
+    geometry, inconsistent reflection/shadow, visible generator watermark),
+    shown as "Model reports: …" for the viewer to check. The prompt pins the
+    bias (wrongly flagging real photos or artwork is worse; style is never
+    evidence), forbids identifying people, and treats text in images as
+    untrusted. The image isn't logged or stored.
+  - **Limits:** `ai-image-hour` 10 and `ai-image-day` 30 per IP. The global
+    budget is shared with 2b as `ai-check-all` (`AI_CHECK_DAILY_CAP`,
+    renamed from `AI_TEXT_DAILY_CAP`; resets the shared counter once).
+    Limit modules moved to `src/lib/ai-check/`.
+  - **Not covered:** Google SynthID (needs Google's detector), CSS background
+    images, and images inside iframes.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

@@ -56,12 +56,57 @@
             Sends up to about 2,000 words of this page's main text (no address or title) to TrustTab, which asks
             Anthropic's Claude for an estimate. TrustTab doesn't store the text.
           </p>
-          <button type="button" id="writing-button">Check this page's writing</button>
+          <button type="button" id="writing-button" class="ai-action">Check this page's writing</button>
           <div id="writing-result" class="writing-result" data-tone="notice" aria-live="polite" hidden>
             <h3 id="writing-title"></h3>
             <p id="writing-rationale" class="writing-rationale" hidden></p>
             <p id="writing-evidence" class="writing-rationale" hidden></p>
             <ul id="writing-details"></ul>
+          </div>
+        </div>
+
+        <!--
+          2c: images. Listing and reading metadata stay in the browser; only
+          "Ask for an estimate" sends anything. Four looks, one per confidence
+          level: verified (solid), unverified/unsigned (hatched edge), estimate
+          (dashed), nothing found (plain).
+        -->
+        <div class="ai-images">
+          <h2>Image check</h2>
+          <p class="ai-writing-disclosure">
+            Lists this page's images. Checking one reads its Content Credentials and metadata in your browser; nothing is
+            sent unless you ask for an estimate.
+          </p>
+          <button type="button" id="images-button" class="ai-action">Find images on this page</button>
+          <p id="images-status" class="images-status" hidden></p>
+          <ul id="images-list" class="images-list" hidden></ul>
+
+          <div id="image-result" hidden>
+            <div id="provenance-card" class="provenance" data-tier="notice" aria-live="polite">
+              <span id="provenance-chip" class="chip"></span>
+              <h3 id="provenance-title"></h3>
+              <ul id="provenance-statements"></ul>
+              <ul id="provenance-details" class="fineprint"></ul>
+            </div>
+
+            <div id="image-permission" class="image-permission" hidden>
+              <p id="image-permission-text"></p>
+              <button type="button" id="image-permission-button" class="ai-action">Allow reading images from this site</button>
+            </div>
+
+            <div id="image-estimate" class="image-estimate" hidden>
+              <p class="ai-writing-disclosure">
+                Sends a smaller copy of this image (no page address) to TrustTab, which asks Anthropic's Claude for an
+                estimate. Images of people are sent too. TrustTab doesn't store the image.
+              </p>
+              <button type="button" id="image-estimate-button" class="ai-action">Ask for an estimate</button>
+              <div id="image-estimate-result" class="writing-result" data-tone="notice" aria-live="polite" hidden>
+                <span id="image-estimate-chip" class="chip" data-kind="estimate">Estimate</span>
+                <h3 id="image-estimate-title"></h3>
+                <ul id="image-estimate-artifacts" class="writing-rationale"></ul>
+                <ul id="image-estimate-details"></ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>

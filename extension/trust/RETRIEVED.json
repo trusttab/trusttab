@@ -1,0 +1,9 @@
+{
+  "retrieved": "2026-09-15",
+  "sources": {
+    "c2pa-trust-list.pem": "https://raw.githubusercontent.com/c2pa-org/conformance-public/main/trust-list/C2PA-TRUST-LIST.pem",
+    "interim-anchors.pem": "https://contentcredentials.org/trust/anchors.pem",
+    "interim-allowed.sha256.txt": "https://contentcredentials.org/trust/allowed.sha256.txt",
+    "interim-store.cfg": "https://contentcredentials.org/trust/store.cfg"
+  }
+}

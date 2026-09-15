@@ -1,7 +1,21 @@
+import { describeImageEstimate, type ImageEstimateOutcome } from "@/lib/ai-image/display";
 import { describeTextEstimate, MAX_CHARS, type TextEstimateOutcome } from "@/lib/ai-text/display";
 import { describeLookup, type LookupOutcome } from "@/lib/registry-display";
 
 import { domainFromTabUrl, lookupDomain } from "./lookup";
+import type { WorkerRequest } from "./c2pa-worker";
+import {
+  collectImageCandidates,
+  fetchWithPermission,
+  MAX_CANDIDATES,
+  prepareEstimateJpeg,
+  readImageBytes,
+  requestImageEstimate,
+  sniffImageFormat,
+  type ImageBytes,
+  type ImageCandidate,
+} from "./image-check";
+import { describeProvenance, findUnsignedAiMetadata, type CredentialsResult } from "./provenance";
 import { requestTextEstimate } from "./text-estimate";
 import { extractMainText } from "./text-extract";
 import { WIDGET_SIGNATURES } from "./widget-signatures";
@@ -199,6 +213,195 @@ function setupWritingCheck() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// AI Check 2c: images
+
+const inExtension = () => typeof chrome !== "undefined" && !!chrome.scripting?.executeScript;
+
+const fillList = (id: string, items: string[]) => {
+  const list = $(id);
+  list.replaceChildren(
+    ...items.map((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      return li;
+    }),
+  );
+  list.hidden = items.length === 0;
+};
+
+let c2paWorker: Worker | undefined;
+let trustFiles: Promise<WorkerRequest["trust"]> | undefined;
+
+/** Reads Content Credentials in the extension's own worker; nothing leaves the browser. */
+async function readCredentials(blob: Blob, format: string): Promise<CredentialsResult> {
+  const text = (path: string) => fetch(path).then((r) => r.text());
+  trustFiles ??= Promise.all([
+    text("trust/c2pa-trust-list.pem"),
+    text("trust/interim-anchors.pem"),
+    text("trust/interim-allowed.sha256.txt"),
+    text("trust/interim-store.cfg"),
+  ]).then(([c2pa, interimAnchors, interimAllowed, interimConfig]) => ({ c2pa, interimAnchors, interimAllowed, interimConfig }));
+  const trust = await trustFiles;
+  c2paWorker ??= new Worker("c2pa-worker.js", { type: "module" });
+  const worker = c2paWorker;
+  return new Promise((resolve) => {
+    worker.onmessage = (event: MessageEvent<CredentialsResult>) => resolve(event.data);
+    worker.onerror = () => resolve({ kind: "error" });
+    worker.postMessage({ blob, format, trust } satisfies WorkerRequest);
+  });
+}
+
+let currentTabId: number | undefined;
+let selectedBlob: Blob | undefined;
+let checkToken = 0;
+
+function renderProvenance(display: ReturnType<typeof describeProvenance>) {
+  const card = $("provenance-card");
+  card.dataset.tier = display.tier;
+  $("provenance-chip").textContent = display.chip;
+  $("provenance-title").textContent = display.title;
+  fillList("provenance-statements", display.statements);
+  fillList("provenance-details", display.details);
+}
+
+function renderImageEstimate(outcome: ImageEstimateOutcome) {
+  const display = describeImageEstimate(outcome);
+  const box = $("image-estimate-result");
+  box.dataset.tone = display.tone;
+  box.hidden = false;
+  $("image-estimate-chip").hidden = display.tone !== "estimate";
+  $("image-estimate-title").textContent = display.title;
+  // Model output: textContent only.
+  fillList("image-estimate-artifacts", display.artifacts.map((a) => `Model reports: ${a}`));
+  fillList("image-estimate-details", display.details);
+}
+
+async function checkImage(candidate: ImageCandidate) {
+  const token = ++checkToken;
+  selectedBlob = undefined;
+  $("image-result").hidden = false;
+  $("image-permission").hidden = true;
+  $("image-estimate").hidden = true;
+  $("image-estimate-result").hidden = true;
+  renderProvenance({ tier: "notice", chip: "Reading", title: "Reading this image's metadata…", statements: [], details: [], allowEstimate: false });
+
+  let bytes: ImageBytes;
+  if (inExtension() && currentTabId !== undefined) bytes = await readImageBytes(currentTabId, candidate.src);
+  else bytes = await fetchWithPermission(candidate.src); // development preview
+  if (token !== checkToken) return;
+
+  if (bytes.kind === "needs_permission") {
+    const host = new URL(bytes.origin.replace(/\/\*$/, "")).host;
+    renderProvenance({ tier: "notice", chip: "Not checked", title: "Permission needed to read this image", statements: [], details: [], allowEstimate: false });
+    $("image-permission-text").textContent =
+      `This image is on ${host}, which doesn't let other sites read its files. Chrome will ask whether TrustTab may read data on ${host}; it's used only to read images you pick.`;
+    const button = $<HTMLButtonElement>("image-permission-button");
+    button.onclick = () => {
+      // Called directly in the click handler: Chrome only shows the prompt for a user gesture.
+      void chrome.permissions.request({ origins: [bytes.origin] }).then((granted) => {
+        if (granted) void checkImage(candidate);
+        else $("image-permission-text").textContent = "Permission wasn't granted, so this image can't be read.";
+      });
+    };
+    $("image-permission").hidden = false;
+    return;
+  }
+  if (bytes.kind !== "ok") {
+    renderProvenance({
+      tier: "notice",
+      chip: "Not checked",
+      title: bytes.kind === "too_large" ? "This image is too large to check" : "Couldn't read this image",
+      statements: [],
+      details: ["This says nothing about how the image was made."],
+      allowEstimate: false,
+    });
+    return;
+  }
+
+  const data = new Uint8Array(await bytes.blob.arrayBuffer());
+  const format = sniffImageFormat(data, bytes.blob.type);
+  const credentials: CredentialsResult = format ? await readCredentials(bytes.blob, format) : { kind: "unsupported" };
+  if (token !== checkToken) return;
+  const display = describeProvenance(credentials, credentials.kind === "manifest" && credentials.state === "Trusted" ? [] : findUnsignedAiMetadata(data));
+  renderProvenance(display);
+  selectedBlob = bytes.blob;
+  $("image-estimate").hidden = !display.allowEstimate;
+}
+
+function setupImageCheck() {
+  const findButton = $<HTMLButtonElement>("images-button");
+  findButton.addEventListener("click", async () => {
+    const status = $("images-status");
+    let candidates: ImageCandidate[] = [];
+    if (inExtension()) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) {
+        status.textContent = "Chrome doesn't let extensions read this kind of page.";
+        status.hidden = false;
+        return;
+      }
+      currentTabId = tab.id;
+      try {
+        const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectImageCandidates, args: [MAX_CANDIDATES] });
+        candidates = injection?.result ?? [];
+      } catch {
+        status.textContent = "Chrome doesn't let extensions read this page.";
+        status.hidden = false;
+        return;
+      }
+    } else {
+      // Development preview: `?imageUrls=a,b` stands in for the page's images.
+      candidates = (new URLSearchParams(location.search).get("imageUrls") ?? "").split(",").filter(Boolean).map((src) => ({ src, width: 0, height: 0, alt: "" }));
+    }
+
+    status.textContent = candidates.length
+      ? `${candidates.length} image${candidates.length === 1 ? "" : "s"} found. Pick one to check.`
+      : "No images of at least 200px found on this page.";
+    status.hidden = false;
+    const list = $("images-list");
+    list.replaceChildren(
+      ...candidates.map((candidate, i) => {
+        const li = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.setAttribute("aria-pressed", "false");
+        const name = candidate.alt || decodeURIComponent(candidate.src.split(/[?#]/)[0].split("/").pop() || "").slice(0, 60) || `Image ${i + 1}`;
+        button.title = candidate.width ? `${name} (${candidate.width}×${candidate.height})` : name;
+        button.setAttribute("aria-label", `Check image: ${button.title}`);
+        const img = document.createElement("img");
+        img.src = candidate.src;
+        img.alt = "";
+        img.referrerPolicy = "no-referrer";
+        img.loading = "lazy";
+        button.append(img);
+        button.addEventListener("click", () => {
+          for (const other of list.querySelectorAll("button")) other.setAttribute("aria-pressed", String(other === button));
+          void checkImage(candidate);
+        });
+        li.append(button);
+        return li;
+      }),
+    );
+    list.hidden = candidates.length === 0;
+  });
+
+  const estimateButton = $<HTMLButtonElement>("image-estimate-button");
+  estimateButton.addEventListener("click", async () => {
+    const blob = selectedBlob;
+    if (!blob) return;
+    estimateButton.disabled = true;
+    estimateButton.textContent = "Checking…";
+    try {
+      const jpeg = await prepareEstimateJpeg(blob);
+      renderImageEstimate(jpeg ? await requestImageEstimate(API_BASE, jpeg) : { kind: "unreadable" });
+    } finally {
+      estimateButton.disabled = false;
+      estimateButton.textContent = "Ask again";
+    }
+  });
+}
+
 let widgetCheckStarted = false;
 
 function setupTabs() {
@@ -221,6 +424,7 @@ function setupTabs() {
 async function main() {
   setupTabs();
   setupWritingCheck();
+  setupImageCheck();
   $("issuer").textContent = new URL(API_BASE).host;
 
   const target = domainFromTabUrl(await activeTabUrl());

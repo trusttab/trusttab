@@ -37,10 +37,37 @@ verified by TrustTab.
     (estimate)**, with the model's one-sentence reason and a warning that
     AI-text detection is often wrong. Pages with under 150 words get "Not
     enough text to estimate" and nothing is sent.
+  - **Image check** runs in steps, each from a click. **Find images on this
+    page** lists visible images of at least 200px. Picking one reads the
+    image file in your browser and checks, in order:
+    1. **Content Credentials (C2PA)**, validated with the official c2pa-rs
+       WebAssembly build against the official C2PA Trust List, then the
+       interim Content Credentials list. A trusted signature is shown as
+       **verified** (solid card): who signed and what they state, such as
+       "created with generative AI". The popup notes that a signature proves
+       who made the statements and that the file is unchanged, not that the
+       statements are true.
+    2. **Unverified information** (hatched card): credentials from a signer
+       that isn't on a trust list, credentials that failed validation, or
+       unsigned metadata that mentions AI (IPTC digital source type,
+       Stable Diffusion/ComfyUI generation settings, AI generator names).
+       Anyone can edit these, and the popup says so.
+    3. **Nothing found** (plain card), which is common: most sites strip
+       metadata.
+
+    Unless credentials were verified, **Ask for an estimate** sends a copy
+    of the image, downscaled to at most 1024px, to TrustTab, which asks
+    Claude. The result (dashed card) is either **Possibly AI-generated
+    (estimate, no verified metadata found)**, listing the concrete signs the
+    model reports (for example garbled text) so you can look yourself, or
+    **No clear signs of AI generation (estimate, no verified metadata
+    found)**. It never says an image is real.
 
 ## Privacy and permissions
 
-- Permissions are **`activeTab`** and **`scripting`**. `activeTab` gives the
+- Permissions are **`activeTab`** and **`scripting`**, plus **optional**
+  host permissions that are requested one site at a time, only for the image
+  check (see below). `activeTab` gives the
   popup the address of the tab you're on, and only after you click the toolbar
   button. `scripting` lets it run the widget check in that tab, which
   `activeTab` also limits to the tab you clicked on. There are no host
@@ -54,6 +81,17 @@ verified by TrustTab.
   log or store the text. Anthropic processes it under its commercial
   API terms, including its data retention policy. Checks
   are rate-limited per IP address (10 per hour, 30 per day).
+- The image check reads images in your browser. Listing images and reading
+  their metadata send nothing. If an image is on another site that doesn't
+  allow reading its files, the popup asks you to grant access to that one
+  site (an optional host permission, requested only when you click).
+  Thumbnails in the popup load from the image's own address, without a
+  referrer.
+- **Ask for an estimate** is the only image step that sends anything: a
+  downscaled JPEG copy (which drops the file's metadata), with no page
+  address and no cookies. Photos of people are sent too. TrustTab doesn't log
+  or store the image, and image estimates have their own per-IP limits (10 per
+  hour, 30 per day).
 - The extension sends that tab's domain to TrustTab **only when you open the
   popup**. It does not watch your browsing, run on the pages you visit, or
   send anything in the background.
@@ -115,7 +153,7 @@ widget is installed. If the vendor's host also serves other files (Zendesk's
 
 ```
 extension/
-  manifest.json      MV3 manifest (activeTab + scripting)
+  manifest.json      MV3 manifest (activeTab + scripting; optional host permissions)
   popup.html/.css    popup UI
   src/popup.ts       reads the active tab, renders the result
   src/lookup.ts      tab URL → domain; calls GET /api/verify/by-domain/:domain
@@ -123,6 +161,10 @@ extension/
   src/widgets.ts     in-page evidence collector, matching, AI Check wording
   src/text-extract.ts  in-page main-text extraction (run on click only)
   src/text-estimate.ts calls POST /api/ai-check/text; wording is in src/lib/ai-text/display.ts
+  src/image-check.ts   image listing, reading image bytes, estimate request
+  src/c2pa-worker.ts   worker that validates Content Credentials (c2pa-rs WebAssembly)
+  src/provenance.ts    credentials/metadata interpretation, unsigned AI markers, tier wording
+  trust/               committed C2PA trust lists (update: node extension/update-trust-lists.mjs)
   build.mjs          esbuild bundle → dist/
   make-icons.mjs     generates icons/ (no image dependencies)
   preview.mjs        serves dist/ for popup development

@@ -15,6 +15,7 @@ import { build } from "esbuild";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(here, "dist");
+const root = path.join(here, "..");
 const apiBase = (process.env.TRUSTTAB_URL ?? "https://trusttab-mu.vercel.app").replace(/\/+$/, "");
 
 try {
@@ -39,6 +40,21 @@ await build({
   legalComments: "none",
   logLevel: "warning",
 });
+
+// The Content Credentials (C2PA) reader: a module worker plus the c2pa-rs
+// WebAssembly binary, both served from the extension's own files.
+await build({
+  entryPoints: [path.join(here, "src/c2pa-worker.ts")],
+  outfile: path.join(dist, "c2pa-worker.js"),
+  bundle: true,
+  format: "esm",
+  target: "chrome120",
+  tsconfig: path.join(here, "tsconfig.json"),
+  legalComments: "none",
+  logLevel: "warning",
+});
+cpSync(path.join(root, "node_modules/@contentauth/c2pa-wasm/pkg/c2pa_bg.wasm"), path.join(dist, "c2pa_bg.wasm"));
+cpSync(path.join(here, "trust"), path.join(dist, "trust"), { recursive: true });
 
 for (const file of ["manifest.json", "popup.html", "popup.css"]) {
   cpSync(path.join(here, file), path.join(dist, file));

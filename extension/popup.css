@@ -259,7 +259,7 @@ main {
   color: var(--muted);
 }
 
-#writing-button {
+.ai-action {
   appearance: none;
   font: inherit;
   font-size: 13px;
@@ -271,7 +271,7 @@ main {
   cursor: pointer;
 }
 
-#writing-button:disabled {
+.ai-action:disabled {
   opacity: 0.6;
   cursor: progress;
 }
@@ -304,3 +304,153 @@ main {
   font-size: 11px;
   color: var(--muted);
 }
+
+.ai-images {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.ai-images h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.images-status {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.images-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.images-list button {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--unknown-bg);
+  cursor: pointer;
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+
+.images-list button[aria-pressed="true"] {
+  outline: 2px solid var(--ai-fg);
+  outline-offset: 1px;
+}
+
+.images-list img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#image-result {
+  margin-top: 10px;
+}
+
+/*
+ * Confidence tiers for image results. Each has its own look so the level is
+ * legible at a glance, not just in the wording:
+ *   verified   solid violet edge and fill, filled chip
+ *   unverified hatched edge, no fill, outlined chip (between fact and estimate)
+ *   estimate   dashed outline (.writing-result), dashed chip
+ *   none       plain border, grey chip
+ */
+.provenance {
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 8px 12px 8px 14px;
+}
+
+.provenance[data-tier="verified"] {
+  border-color: var(--ai-edge);
+  border-left: 5px solid var(--ai-fg);
+  background: var(--ai-bg);
+}
+
+.provenance[data-tier="unverified"] {
+  border-color: var(--ai-edge);
+  padding-left: 17px;
+}
+
+.provenance[data-tier="unverified"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  border-radius: 8px 0 0 8px;
+  background: repeating-linear-gradient(-45deg, var(--ai-fg) 0 3px, transparent 3px 6px);
+}
+
+.provenance h3 {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.provenance ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.provenance .fineprint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.provenance[data-tier="verified"] .chip {
+  background: var(--ai-fg);
+  border-color: var(--ai-fg);
+  color: var(--bg);
+}
+
+.provenance[data-tier="verified"] .chip::before {
+  content: "✓ ";
+}
+
+.provenance[data-tier="unverified"] .chip {
+  border-color: var(--ai-fg);
+  color: var(--ai-fg);
+}
+
+.chip[data-kind="estimate"] {
+  border-style: dashed;
+  border-color: var(--ai-edge);
+  color: var(--ai-fg);
+}
+
+.image-permission,
+.image-estimate {
+  margin-top: 8px;
+}
+
+.image-permission p {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
