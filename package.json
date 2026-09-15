@@ -12,9 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "keys:generate": "node scripts/generate-signing-key.mjs",
-    "test": "tsx --conditions=react-server --test \"src/**/*.test.ts\""
+    "test": "tsx --conditions=react-server --test \"src/**/*.test.ts\"",
+    "test:integration": "tsx --env-file=.env.local --conditions=react-server --test \"src/**/*.itest.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "better-auth": "^1.7.4",

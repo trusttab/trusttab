@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BadgeSnippet } from "@/components/badge-snippet";
-import { ManifestEditor } from "@/components/manifest-editor";
 import { OwnershipPanel } from "@/components/ownership-panel";
+import { SiteWorkspace } from "@/components/site-workspace";
 import { PublishedManifest } from "@/components/published-manifest";
 import { siteStatusLabel, siteStatusTone, StatusPill } from "@/components/status-pill";
 import { TrafficLog } from "@/components/traffic-log";
@@ -77,13 +77,13 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
             </p>
           )}
           {draft && (
-            <ManifestEditor
-              key={`${draft.version}:${draft.hash}`}
+            <SiteWorkspace
               siteId={site.id}
+              domain={site.domain}
               draft={{ input: draft.input, version: draft.version, hash: draft.hash }}
               published={latest ? manifestToInput(latest.payloadJson) : null}
               assistantChanges={assistantChanges.map((c) => ({ id: c.id, summary: c.summary, reason: c.reason }))}
-              locked={false}
+              assistantEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
             />
           )}
         </>

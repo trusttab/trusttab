@@ -455,6 +455,29 @@ rather than silently changing direction.
   cookie could erase an account. It is rate-limited to 3 per 10s, and an
   "account deleted" notice is emailed when email is enabled. No
   email-confirmation step, since that can't work while email is disabled.
+- **2026-09-14 — Dashboard assistant (per DASHBOARD_ASSISTANT_SPEC.md).**
+  Claude (`claude-sonnet-5`, override with `ASSISTANT_MODEL`) in a per-site
+  chat panel. A manual tool loop (max 8 steps) over a fixed allowlist in
+  `src/lib/assistant/tools.ts`: get_site_overview, crawl_site_forms,
+  add/update/remove_endpoint, set_rate_limit, preview_checks,
+  propose_domain_claim. All edits go to a saved draft (`manifest_drafts`,
+  optimistic versioning), logged with a reason in `draft_changes` and
+  highlighted in the editor. The crawler reuses the engine's fetcher and form
+  parsing, and sends the model structure only (names, types, labels of at
+  most 60 characters; labels withheld on injection-flagged pages).
+  **Publishing is human-only, structurally:** no publish tool; ESLint
+  `no-restricted-imports` plus `capabilities.test.ts` (transitive import
+  graph) keep assistant code from reaching signing, store or publish routes;
+  the publish endpoint signs only the stored draft whose hash the owner
+  reviewed, with a single-use confirmation (`publish_confirmations`) bound to
+  user, session, site and hash, 2-minute TTL; confirm, publish and the real
+  re-check require same-origin browser requests. **Re-check decision (a):**
+  the assistant only runs a *preview* that records nothing and signs nothing.
+  The engine takes the JWKS as a parameter, and the preview fetches the public
+  JWKS over HTTP. The assistant may not set the no-injection pledge (owner's
+  own declaration). Domain claims are proposals the owner confirms with a
+  click, one at a time. Chat history is not stored (cut for speed). No
+  WebAuthn yet (user decision: revisit later).
 
 ## Status at the end of the 5-day build (2026-09-14)
 

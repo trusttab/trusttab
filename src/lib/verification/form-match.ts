@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 /**
  * Check 1 — endpoint existence + field match (pure: HTML in, verdict out).
@@ -26,26 +27,28 @@ export type FormMatchResult = {
 
 type FormInfo = { names: Set<string>; method: string; index: number };
 
+/**
+ * The named controls belonging to a form, in document order: those inside it
+ * plus those outside it that join via `form="<id>"`. Shared with the
+ * assistant's form extraction (./form-extract.ts) so both see the same fields.
+ */
+export function formControls($: cheerio.CheerioAPI, form: AnyNode): AnyNode[] {
+  const selector = "input[name], select[name], textarea[name], button[name]";
+  const inside = $(form).find(selector).toArray();
+  const id = $(form).attr("id");
+  const outside = id ? $(selector).filter((_, el) => $(el).attr("form") === id).toArray() : [];
+  return [...inside, ...outside.filter((el) => !inside.includes(el))];
+}
+
 function collectForms(html: string): FormInfo[] {
   const $ = cheerio.load(html);
-  const controls = "input[name], select[name], textarea[name], button[name]";
-
   return $("form")
     .toArray()
-    .map((form, index) => {
-      const names = new Set<string>();
-      $(form)
-        .find(controls)
-        .each((_, el) => void names.add($(el).attr("name")!));
-      // Controls outside the form can join it via the `form="<id>"` attribute.
-      const id = $(form).attr("id");
-      if (id) {
-        $(controls)
-          .filter((_, el) => $(el).attr("form") === id)
-          .each((_, el) => void names.add($(el).attr("name")!));
-      }
-      return { names, method: ($(form).attr("method") ?? "get").toUpperCase(), index };
-    });
+    .map((form, index) => ({
+      names: new Set(formControls($, form).map((el) => $(el).attr("name")!)),
+      method: ($(form).attr("method") ?? "get").toUpperCase(),
+      index,
+    }));
 }
 
 export function matchForm(html: string, declaredFields: string[], declaredMethod: string): FormMatchResult {

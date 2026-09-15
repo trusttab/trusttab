@@ -82,6 +82,51 @@ authorized to act for someone. TrustTab is complementary: it verifies the
 4. **Show the badge.** Embed the snippet from your dashboard. It displays your
    live status and links to a public verification page on the issuer.
 
+## Dashboard assistant
+
+Each site's dashboard has an AI assistant (Claude) that can:
+
+- **draft the manifest from your real forms.** It crawls your site with the
+  same fetcher the verification checks use and proposes endpoints with the
+  exact field names and types in your HTML. If it can't see a form (for
+  example one built by JavaScript), it says so and suggests self-attestation
+  instead of guessing;
+- **explain check results in plain language**, based only on what the checks
+  found;
+- **operate your draft on request:** add or change endpoints, toggle
+  self-attestation or CAPTCHA flags, adjust the rate limit, preview the checks,
+  and propose claiming a new domain (you confirm with a click).
+
+Everything it does lands in your **draft**, visibly, in the manifest editor.
+Before you publish, TrustTab shows exactly what will change and why the
+assistant changed it.
+
+### The assistant can never publish
+
+A manifest is a signed attestation by you, so publishing is a human-only
+action, enforced in code rather than just the UI:
+
+1. **No capability.** The assistant's tools are a fixed allowlist with nothing
+   that publishes, signs or re-signs. A lint rule and a test over the
+   transitive import graph fail the build if assistant code can reach the
+   signing module, the manifest store or the publish routes. Its preview checks
+   verify signatures with the public JWKS, like any outside verifier.
+2. **You publish what you reviewed.** The publish endpoint accepts no manifest
+   content. It signs the stored draft, and only if the draft's hash matches the
+   one you reviewed.
+3. **Single-use confirmation.** Publishing first obtains a confirmation bound
+   to your user, your current session, the site and that draft hash. It is
+   valid for two minutes and usable once.
+4. **Same-origin browser requests only** for confirming, publishing and the
+   real re-check.
+
+What this can't prove is that a human hand made the click: code running inside
+your own signed-in browser (a malicious extension, say) could repeat the
+calls. A WebAuthn "user presence" check at publish would close that gap and is
+a planned option.
+
+The assistant needs `ANTHROPIC_API_KEY`; without it, the panel is hidden.
+
 ## Public API
 
 | Endpoint | Returns |
@@ -228,6 +273,7 @@ npm run dev                  # http://localhost:3000
 | `TRUSTTAB_ISSUER_URL` | Public `https://` base URL of this instance, written into manifests |
 | `TRUSTTAB_SIGNING_PRIVATE_KEY` | Ed25519 signing key. Generate with `npm run keys:generate` and back it up |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification and password reset email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification and password reset** (with a startup warning) |
+| `ANTHROPIC_API_KEY`, `ASSISTANT_MODEL` | *Optional.* Enables the dashboard assistant (default model `claude-sonnet-5`) |
 | `AGENTTRUST_VERIFY_TOKEN` | *Optional.* Makes this deployment publish its own verification tag so it can claim its own domain |
 
 ### Deploying to Vercel
@@ -258,6 +304,7 @@ outbound verification traffic.
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build (includes type checking) |
 | `npm test` | Unit tests (Node's built-in test runner) |
+| `npm run test:integration` | Assistant and publish-gate tests against the database in `.env.local` |
 | `npm run lint` / `npm run typecheck` | Static checks |
 | `npm run keys:generate` | Print a new manifest-signing key |
 | `npm run db:generate` | Generate a SQL migration after editing `src/db/schema.ts` |
@@ -287,6 +334,9 @@ src/
     safe-fetch.ts       SSRF-hardened fetch for user-supplied sites
     manifest/           build, canonicalize, sign, validate manifests
     verification/       verification checks and engine
+    assistant/          dashboard assistant: tool allowlist, crawler, model loop
+    drafts/             saved manifest drafts (shared by editor and assistant)
+    publish-gate.ts     human-only publish confirmations
 agent-trust.schema.json manifest format (JSON Schema)
 drizzle/                generated SQL migrations
 ```
@@ -304,6 +354,8 @@ drizzle/                generated SQL migrations
 - [x] Sign-in/sign-up rate limiting that holds across serverless instances
 - [x] Email verification for new accounts and password reset (need a Resend key and verified sending domain in production)
 - [x] Change password and delete account for signed-in users (`/dashboard/account`)
+- [x] Dashboard assistant: drafts from real forms, plain-language explanations, draft operations (never publishes)
+- [ ] WebAuthn user-presence confirmation for publishing
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
 - [ ] Scheduled re-verification
 
