@@ -30,7 +30,7 @@ describe("image estimate labels", () => {
 
   test("possibly_ai shows the artifacts to look for; no_clear_signs says it isn't proof of a real image", () => {
     const ai = describeImageEstimate({ kind: "response", response: applyArtifactRule("possibly_ai", [{ type: "malformed_anatomy", where: "left hand" }]) });
-    assert.deepEqual(ai.artifacts, [`${VISUAL_ARTIFACTS.malformed_anatomy}: left hand`]);
+    assert.deepEqual(ai.artifacts, [`${VISUAL_ARTIFACTS.malformed_anatomy.label}: left hand`]);
     const clear = describeImageEstimate({ kind: "response", response: applyArtifactRule("no_clear_signs", []) });
     assert.deepEqual(clear.artifacts, []);
     assert.match(clear.details[0], /doesn't show the image is real/);
@@ -65,6 +65,17 @@ describe("possibly_ai needs a listed artifact", () => {
     assert.equal(parseImageEstimateResponse({ result: "estimate", assessment: "possibly_ai", artifacts: [{ type: "garbled_text", where: "  on the\nsign " }] })?.assessment, "possibly_ai");
     assert.deepEqual(parseImageEstimateResponse({ result: "estimate", assessment: "possibly_ai", artifacts: [{ type: "garbled_text", where: "  on the\nsign " }] })?.artifacts, [{ type: "garbled_text", where: "on the sign" }]);
     assert.deepEqual(applyArtifactRule("no_clear_signs", [{ type: "garbled_text", where: "x" }]).artifacts, []);
+  });
+
+  test("long locations are cut at a word boundary", () => {
+    const [artifact] = parseImageEstimateResponse({
+      result: "estimate",
+      assessment: "possibly_ai",
+      artifacts: [{ type: "impossible_geometry", where: "The large sphere in the center - puzzle pieces don't form a coherent 3D sphere surface" }],
+    })!.artifacts;
+    assert.ok(artifact.where.length <= 80);
+    assert.match(artifact.where, /\S…$/);
+    assert.doesNotMatch(artifact.where, / s…$/);
   });
 
   test("malformed responses are rejected", () => {

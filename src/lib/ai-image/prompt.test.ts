@@ -16,6 +16,9 @@ test("the prompt treats wrongly flagging real photos or artwork as AI the worse 
   assert.match(IMAGE_ESTIMATE_PROMPT, /Answer possibly_ai only when you can point to at least one artifact from the list above/);
   assert.match(IMAGE_ESTIMATE_PROMPT, /Style alone is never enough for possibly_ai/);
   assert.match(IMAGE_ESTIMATE_PROMPT, /Overall style is never evidence/);
+  // From the live test: "puzzle pieces floating in the sky" was offered as an artifact.
+  assert.match(IMAGE_ESTIMATE_PROMPT, /Surreal, fantastical or physically impossible subject matter is a creative choice, not an artifact/);
+  assert.match(IMAGE_ESTIMATE_PROMPT, /An artifact is an error in how something is drawn, not an unusual thing to draw/);
   assert.match(IMAGE_ESTIMATE_PROMPT, /No method detects AI-generated images reliably, including you/);
 });
 

@@ -22,11 +22,17 @@ export type ImageAssessment = (typeof IMAGE_ASSESSMENTS)[number];
  * ("too smooth", "unusual lighting"). This is the only place they are defined.
  */
 export const VISUAL_ARTIFACTS = {
-  garbled_text: "Garbled or nonsense text",
-  malformed_anatomy: "Malformed hands, fingers, teeth or other anatomy",
-  impossible_geometry: "Impossible geometry, or objects merging into each other",
-  inconsistent_reflection_or_shadow: "A reflection or shadow that doesn't match the scene",
-  generator_watermark: "A visible AI generator watermark or \"AI-generated\" label",
+  garbled_text: { label: "Garbled text", definition: "Garbled or nonsense text" },
+  malformed_anatomy: { label: "Malformed anatomy", definition: "Malformed hands, fingers, teeth or other anatomy" },
+  impossible_geometry: {
+    label: "Structural error",
+    definition: "Structural errors: objects merging into each other, or patterns and parts that don't connect (tiles, fences, puzzle pieces, furniture legs)",
+  },
+  inconsistent_reflection_or_shadow: { label: "Mismatched reflection or shadow", definition: "A reflection or shadow that doesn't match the scene" },
+  generator_watermark: {
+    label: "AI generator watermark",
+    definition: "A visible AI generator watermark or \"AI-generated\" label (such as DALL·E's row of colored squares in a corner, or a generator's logo)",
+  },
 } as const;
 export type VisualArtifact = keyof typeof VISUAL_ARTIFACTS;
 export const VISUAL_ARTIFACT_TYPES = Object.keys(VISUAL_ARTIFACTS) as VisualArtifact[];
@@ -43,16 +49,22 @@ export type ReportedArtifact = { type: VisualArtifact; where: string };
 /** Body of a successful `POST /api/ai-check/image` response. */
 export type ImageEstimateResponse = { result: "estimate"; assessment: ImageAssessment; artifacts: ReportedArtifact[] };
 
+/** Collapses whitespace and cuts at a word boundary, so a location never ends mid-word. */
+function shortenWhere(value: string): string {
+  const oneLine = value.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= MAX_ARTIFACT_WHERE_CHARS) return oneLine;
+  const cut = oneLine.slice(0, MAX_ARTIFACT_WHERE_CHARS - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.-]+$/, "")}…`;
+}
+
 export function parseArtifacts(value: unknown): ReportedArtifact[] {
   if (!Array.isArray(value)) return [];
   const artifacts: ReportedArtifact[] = [];
   for (const item of value) {
     const { type, where } = (item ?? {}) as { type?: unknown; where?: unknown };
     if (typeof type !== "string" || !VISUAL_ARTIFACT_TYPES.includes(type as VisualArtifact)) continue;
-    artifacts.push({
-      type: type as VisualArtifact,
-      where: typeof where === "string" ? where.replace(/\s+/g, " ").trim().slice(0, MAX_ARTIFACT_WHERE_CHARS) : "",
-    });
+    artifacts.push({ type: type as VisualArtifact, where: typeof where === "string" ? shortenWhere(where) : "" });
     if (artifacts.length === MAX_ARTIFACTS) break;
   }
   return artifacts;
@@ -113,7 +125,7 @@ export function describeImageEstimate(outcome: ImageEstimateOutcome): ImageEstim
       return {
         tone: "estimate",
         title: IMAGE_ESTIMATE_LABELS[assessment],
-        artifacts: artifacts.map((a) => (a.where ? `${VISUAL_ARTIFACTS[a.type]}: ${a.where}` : VISUAL_ARTIFACTS[a.type])),
+        artifacts: artifacts.map((a) => (a.where ? `${VISUAL_ARTIFACTS[a.type].label}: ${a.where}` : VISUAL_ARTIFACTS[a.type].label)),
         details: [
           assessment === "possibly_ai"
             ? "Look for these in the image yourself; the model can be wrong about them."

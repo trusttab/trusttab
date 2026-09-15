@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 import { IMAGE_ASSESSMENTS, MAX_ARTIFACT_WHERE_CHARS, MAX_ARTIFACTS, VISUAL_ARTIFACT_TYPES, VISUAL_ARTIFACTS } from "./display";
 
-const ARTIFACT_LIST = VISUAL_ARTIFACT_TYPES.map((type) => `- ${type}: ${VISUAL_ARTIFACTS[type]}`).join("\n");
+const ARTIFACT_LIST = VISUAL_ARTIFACT_TYPES.map((type) => `- ${type}: ${VISUAL_ARTIFACTS[type].definition}`).join("\n");
 
 /**
  * System prompt for the image estimate. The bias section is pinned by
@@ -17,6 +17,7 @@ export const IMAGE_ESTIMATE_PROMPT = `You look at one image from a web page and 
 - Only these concrete artifacts count as evidence, because a person can look for them in the image themselves:
 ${ARTIFACT_LIST}
 - Overall style is never evidence: smooth skin, perfect lighting, vivid colors, shallow depth of field, a "rendered" look, or a scene that seems too good to be real. Photographers, retouchers, 3D artists and illustrators produce all of these.
+- Surreal, fantastical or physically impossible subject matter is a creative choice, not an artifact: floating objects, impossible scenes, imaginary creatures, magic. Artists have painted these for centuries. An artifact is an error in how something is drawn, not an unusual thing to draw.
 
 ## The two mistakes aren't equally bad
 
