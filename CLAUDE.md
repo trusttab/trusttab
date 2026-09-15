@@ -491,6 +491,28 @@ rather than silently changing direction.
   detour, while wrongly ruling out JS rendering steers owners away from the
   fallback built for them, so ambiguous evidence leans JS-rendered.
   A regression fixture mirrors leasetab.com's measured structure.
+- **2026-09-14 — Chrome extension, Mode 1 (per EXTENSION_SPEC.md).** In
+  `extension/` (MV3, TypeScript, esbuild). Decisions:
+  - **Lookup on click only:** the domain is sent only when the user opens the
+    popup, with no passive browsing data. The spec said "on tab load"; the
+    owner chose privacy. Permission is `activeTab` only; no `tabs`, no host
+    permissions, no content scripts.
+  - **Display mapping** (`src/lib/registry-display.ts`, shared with the app):
+    verified → Verified (green); self_declared → Self-declared (blue, own
+    state); needs_fix, expired → Needs re-check (yellow); failed → Needs
+    re-check plus an explicit "content that could mislead AI agents" finding;
+    pending, not_found → Not verified (grey, neutral, never red).
+  - **Owner link:** a generic "Open in TrustTab" link to
+    `/dashboard/open?domain=`, which routes owners to their site and others
+    to a prefilled claim form. No login detection in the extension (the
+    owner declined host permissions for it).
+  - New public route `GET /api/verify/by-domain/:domain`, sharing
+    `entryForSite` and `registryEntryJson` with the ID lookup. Only the
+    verified claim is served, with exact normalized matching.
+  - `src/lib/domain.ts` is now browser-safe (no `node:net`) so the extension
+    reuses it.
+  - The build URL is configurable (`TRUSTTAB_URL`) and defaults to
+    production. Chrome Web Store publishing is not done.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

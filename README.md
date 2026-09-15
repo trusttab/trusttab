@@ -127,11 +127,19 @@ a planned option.
 
 The assistant needs `ANTHROPIC_API_KEY`; without it, the panel is hidden.
 
+## Browser extension
+
+`extension/` contains a Chrome extension. Click it on any site to see that
+site's TrustTab status. It asks only for the `activeTab` permission, and it
+contacts TrustTab only when you open its popup. See
+[extension/README.md](./extension/README.md) to build and load it.
+
 ## Public API
 
 | Endpoint | Returns |
 | --- | --- |
 | `GET /api/manifest/:domain` | The live signed manifest for a domain |
+| `GET /api/verify/by-domain/:domain` | Same as below, looked up by domain (normalized, exact match; subdomains don't inherit). 404 if the domain has no entry |
 | `GET /api/verify/:verificationId` | `{ verification_id, status, domain, verified_at, expires_at, issuer, manifest_url, self_declared_endpoints }`. `status` is `verified`, `self_declared`, `pending`, `needs_fix`, `failed` or `expired` |
 | `GET /api/badge/:verificationId.svg` | Live status badge |
 | `GET /.well-known/jwks.json` | The issuer's public signing keys |
@@ -310,6 +318,7 @@ outbound verification traffic.
 | `npm run db:generate` | Generate a SQL migration after editing `src/db/schema.ts` |
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:studio` | Browse the database with Drizzle Studio |
+| `npm run ext:build` / `ext:typecheck` / `ext:preview` | Build, typecheck or preview the browser extension |
 
 ## Project layout
 
@@ -355,6 +364,8 @@ drizzle/                generated SQL migrations
 - [x] Email verification for new accounts and password reset (need a Resend key and verified sending domain in production)
 - [x] Change password and delete account for signed-in users (`/dashboard/account`)
 - [x] Dashboard assistant: drafts from real forms, plain-language explanations, draft operations (never publishes)
+- [x] Chrome extension, verification mode
+- [ ] Chrome extension, AI Check mode (widget detection, then estimates)
 - [ ] WebAuthn user-presence confirmation for publishing
 - [ ] Automatically check forms rendered by client-side JavaScript (headless browser)
 - [ ] Scheduled re-verification

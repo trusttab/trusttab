@@ -47,3 +47,6 @@ next-env.d.ts
 # agent skill files installed by the Vercel/Neon integration (local only)
 .agents/
 skills-lock.json
+
+# built browser extension (npm run ext:build)
+extension/dist/

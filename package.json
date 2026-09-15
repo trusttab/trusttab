@@ -12,8 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "keys:generate": "node scripts/generate-signing-key.mjs",
-    "test": "tsx --conditions=react-server --test \"src/**/*.test.ts\"",
-    "test:integration": "tsx --env-file=.env.local --conditions=react-server --test \"src/**/*.itest.ts\""
+    "test": "tsx --conditions=react-server --test \"src/**/*.test.ts\" \"extension/src/**/*.test.ts\"",
+    "test:integration": "tsx --env-file=.env.local --conditions=react-server --test \"src/**/*.itest.ts\"",
+    "ext:build": "node extension/build.mjs",
+    "ext:typecheck": "tsc --noEmit -p extension/tsconfig.json && tsc --noEmit -p extension/tsconfig.test.json",
+    "ext:preview": "node extension/preview.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -33,11 +36,13 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/chrome": "^0.2.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",

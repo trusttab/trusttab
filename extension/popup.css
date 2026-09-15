@@ -1,0 +1,189 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #18181b;
+  --muted: #52525b;
+  --border: #e4e4e7;
+  --tab-active: #18181b;
+  --link: #18181b;
+
+  /* Verification tones. Deliberately no red: "not verified" is an unknown. */
+  --verified-bg: #ecfdf5;
+  --verified-fg: #065f46;
+  --verified-edge: #10b981;
+  --self-bg: #eff6ff;
+  --self-fg: #1e3a8a;
+  --self-edge: #3b82f6;
+  --recheck-bg: #fffbeb;
+  --recheck-fg: #78350f;
+  --recheck-edge: #f59e0b;
+  --unknown-bg: #f4f4f5;
+  --unknown-fg: #3f3f46;
+  --unknown-edge: #a1a1aa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181b;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+    --tab-active: #f4f4f5;
+    --link: #f4f4f5;
+    --verified-bg: #052e22;
+    --verified-fg: #a7f3d0;
+    --self-bg: #172554;
+    --self-fg: #bfdbfe;
+    --recheck-bg: #3b2a06;
+    --recheck-fg: #fde68a;
+    --unknown-bg: #27272a;
+    --unknown-fg: #d4d4d8;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 340px;
+  margin: 0;
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 14px 6px;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.issuer {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+nav {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+[role="tab"] {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 6px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+[role="tab"][aria-selected="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--tab-active);
+  font-weight: 600;
+}
+
+main {
+  padding: 12px 14px 14px;
+}
+
+.status {
+  border-radius: 8px;
+  border-left: 4px solid var(--unknown-edge);
+  background: var(--unknown-bg);
+  color: var(--unknown-fg);
+  padding: 10px 12px;
+}
+
+.status[data-tone="verified"] {
+  border-left-color: var(--verified-edge);
+  background: var(--verified-bg);
+  color: var(--verified-fg);
+}
+
+.status[data-tone="self_declared"] {
+  border-left-color: var(--self-edge);
+  background: var(--self-bg);
+  color: var(--self-fg);
+}
+
+.status[data-tone="recheck"] {
+  border-left-color: var(--recheck-edge);
+  background: var(--recheck-bg);
+  color: var(--recheck-fg);
+}
+
+.status h1 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.status p {
+  margin: 0;
+}
+
+.status-domain {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: 0.8;
+  margin-bottom: 2px !important;
+  overflow-wrap: anywhere;
+}
+
+.finding {
+  margin-top: 8px !important;
+  font-weight: 600;
+}
+
+.status ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.links a {
+  color: var(--link);
+  font-size: 13px;
+}
+
+.privacy {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* AI Check is visually separate from verification: no status colors here. */
+.ai-soon {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.ai-soon h1 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.ai-soon p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TrustTab</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <span class="brand">TrustTab</span>
+      <span class="issuer" id="issuer"></span>
+    </header>
+
+    <!--
+      Two separate modes, never merged into one signal (see EXTENSION_SPEC):
+      "Verified" is TrustTab's verification; "AI Check" is a different feature.
+    -->
+    <nav role="tablist" aria-label="TrustTab modes">
+      <button role="tab" id="tab-verified" aria-selected="true" aria-controls="panel-verified">Verified</button>
+      <button role="tab" id="tab-ai" aria-selected="false" aria-controls="panel-ai">AI Check</button>
+    </nav>
+
+    <main>
+      <section id="panel-verified" role="tabpanel" aria-labelledby="tab-verified">
+        <div id="status-card" class="status" data-tone="loading" aria-live="polite" aria-busy="true">
+          <p class="status-domain" id="status-domain"></p>
+          <h1 id="status-title">Checking…</h1>
+          <p id="status-summary">Looking up this site in the TrustTab registry.</p>
+          <p id="status-finding" class="finding" hidden></p>
+          <ul id="status-facts" hidden></ul>
+        </div>
+        <div id="status-links" class="links" hidden></div>
+        <p class="privacy" id="privacy-note" hidden>Checked only because you opened this popup. TrustTab doesn't see the sites you visit otherwise.</p>
+      </section>
+
+      <section id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
+        <div class="ai-soon">
+          <h1>AI Check: coming soon</h1>
+          <p>
+            A separate check for signs of AI chat widgets and AI-generated content on a page. It is not part of
+            TrustTab verification, and its estimates will always be labeled as estimates.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
