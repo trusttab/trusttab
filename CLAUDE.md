@@ -478,6 +478,19 @@ rather than silently changing direction.
   own declaration). Domain claims are proposals the owner confirms with a
   click, one at a time. Chat history is not stored (cut for speed). No
   WebAuthn yet (user decision: revisit later).
+- **2026-09-14 — Missing-form explanations lean toward JavaScript rendering.**
+  The first live run on leasetab.com showed the old boolean hint
+  ("client-rendered" only if under 300 characters of body text) was wrong
+  for site builders that pre-render SEO text: Base44 ships about 3.4K
+  characters, the hint said "not client-rendered", and the assistant told
+  the owner it wasn't the JS case. `jsRenderingEvidence` now reports signals
+  (app mount point, bundle scripts, form widgets, site builder, text volume)
+  and an assessment of `likely_js_rendered` or `possibly_js_rendered`, with no
+  "not JS" outcome. Text volume never counts against JS rendering. The prompt
+  states the asymmetry: wrongly suggesting self-attestation is a minor
+  detour, while wrongly ruling out JS rendering steers owners away from the
+  fallback built for them, so ambiguous evidence leans JS-rendered.
+  A regression fixture mirrors leasetab.com's measured structure.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

@@ -63,20 +63,87 @@ export function extractForms(html: string): ExtractedForm[] {
     .filter((f) => f.fields.length > 0);
 }
 
+export type JsRenderingEvidence = {
+  /**
+   * - "forms_present": the HTML contains forms; nothing to explain.
+   * - "likely_js_rendered": no forms, and the page shows signs of a
+   *   JavaScript app, a site builder or an embedded form widget.
+   * - "possibly_js_rendered": no forms and no such signs. Still not ruled
+   *   out, since scripts can inject forms in ways the HTML doesn't reveal.
+   *
+   * There is deliberately no "not JS-rendered" outcome. The two mistakes
+   * aren't equally costly: wrongly suggesting self-attestation when a real
+   * form exists is a minor detour, but wrongly ruling out JavaScript
+   * rendering steers the owner away from the fallback built for exactly that
+   * case. So ambiguous evidence leans toward JS-rendered.
+   */
+  assessment: "forms_present" | "likely_js_rendered" | "possibly_js_rendered";
+  /** The observed facts behind the assessment, in plain words. */
+  signals: string[];
+};
+
+const APP_MOUNT_POINTS = "#root, #app, #__next, #__nuxt, #___gatsby, #svelte, [data-reactroot], [ng-version]";
+const BUNDLE_SCRIPT = /\/(assets|_next\/static|static\/js|build|dist)\/[^"']*\.m?js|\/index-[\w-]+\.js|\/main[.-][\w-]+\.js/i;
+const FORM_EMBEDS: [RegExp, string][] = [
+  [/hsforms|hubspot/i, "HubSpot"],
+  [/typeform/i, "Typeform"],
+  [/jotform/i, "Jotform"],
+  [/calendly/i, "Calendly"],
+  [/docs\.google\.com\/forms|forms\.gle/i, "Google Forms"],
+  [/tally\.so/i, "Tally"],
+  [/acuityscheduling/i, "Acuity"],
+];
+const SITE_BUILDERS: [RegExp, string][] = [
+  [/base44/i, "Base44"],
+  [/webflow/i, "Webflow"],
+  [/wix(static)?\.com|wix\.com/i, "Wix"],
+  [/squarespace/i, "Squarespace"],
+  [/framer(usercontent)?\.com|framer\.website/i, "Framer"],
+  [/shopify/i, "Shopify"],
+];
+
 /**
- * True when a page looks like an app shell whose content is rendered by
- * client-side JavaScript: no forms, very little server-rendered text, and a
- * typical mount point or module script. A hint only, and always worded as
- * "looks like" wherever it's shown.
+ * Explains why a page might have no forms in its HTML. Used by the dashboard
+ * assistant to decide how to talk about a missing form. Observations only,
+ * reported as signals, never as a verdict that JavaScript is not involved.
  */
-export function looksClientRendered(html: string): boolean {
+export function jsRenderingEvidence(html: string): JsRenderingEvidence {
   const $ = cheerio.load(html);
-  if ($("form").length > 0) return false;
-  const hasMountPoint = $("#root, #app, #__next, #__nuxt, [data-reactroot]").length > 0;
-  const hasModuleScript = $('script[type="module"], script[src*="/assets/index-"]').length > 0;
-  $("script, style, noscript").remove();
-  const text = $("body").text().replace(/\s+/g, " ").trim();
-  return text.length < 300 && (hasMountPoint || hasModuleScript);
+  const formCount = $("form").length;
+  if (formCount > 0) {
+    return { assessment: "forms_present", signals: [`${formCount} form(s) in the server-rendered HTML`] };
+  }
+
+  const signals: string[] = [];
+  const mounts = $(APP_MOUNT_POINTS).toArray().map((el) => $(el).attr("id") ?? "app root");
+  if (mounts.length > 0) signals.push(`JavaScript app mount point (${[...new Set(mounts)].join(", ")})`);
+
+  const scriptSrcs = $("script[src]").toArray().map((el) => $(el).attr("src") ?? "");
+  const moduleScripts = $('script[type="module"]').length;
+  const bundles = scriptSrcs.filter((src) => BUNDLE_SCRIPT.test(src)).length;
+  if (moduleScripts > 0 || bundles > 0) signals.push(`JavaScript bundle scripts (${Math.max(moduleScripts, bundles)})`);
+
+  const embedSources = [...scriptSrcs, ...$("iframe[src]").toArray().map((el) => $(el).attr("src") ?? "")].join(" ");
+  const embeds = FORM_EMBEDS.filter(([re]) => re.test(embedSources)).map(([, name]) => name);
+  if (embeds.length > 0) signals.push(`embedded form or booking widget (${embeds.join(", ")})`);
+
+  const generator = $('meta[name="generator" i]').attr("content") ?? "";
+  const builders = SITE_BUILDERS.filter(([re]) => re.test(`${generator} ${embedSources} ${$("link[href]").toArray().map((el) => $(el).attr("href")).join(" ")}`)).map(
+    ([, name]) => name,
+  );
+  if (builders.length > 0) signals.push(`built with a site builder (${[...new Set(builders)].join(", ")})`);
+
+  $("script, style, noscript, template").remove();
+  const textChars = $("body").text().replace(/\s+/g, " ").trim().length;
+  if (textChars > 0) {
+    signals.push(
+      `${textChars} characters of text in the HTML (site builders often pre-render text for search engines, so this doesn't mean the form is in the HTML)`,
+    );
+  }
+
+  const likely = mounts.length > 0 || moduleScripts > 0 || bundles > 0 || embeds.length > 0 || builders.length > 0;
+  if (!likely) signals.push("no signs of a JavaScript app, but scripts could still add a form after the page loads");
+  return { assessment: likely ? "likely_js_rendered" : "possibly_js_rendered", signals };
 }
 
 function fieldType($: cheerio.CheerioAPI, els: AnyNode[]): string | null {

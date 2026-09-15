@@ -3,7 +3,7 @@ import "server-only";
 import * as cheerio from "cheerio";
 
 import { fetchSitePage, isSameSite } from "@/lib/site-fetch";
-import { extractForms, looksClientRendered, type ExtractedForm } from "@/lib/verification/form-extract";
+import { extractForms, jsRenderingEvidence, type ExtractedForm, type JsRenderingEvidence } from "@/lib/verification/form-extract";
 import { scanForInjection } from "@/lib/verification/injection-scan";
 
 /**
@@ -26,8 +26,11 @@ export type CrawledPage = {
   status: number | null;
   error?: string;
   forms: ExtractedForm[];
-  /** No forms, little server-rendered text, and an app mount point. A hint, not a finding. */
-  looksClientRendered: boolean;
+  /**
+   * Why the page might have no forms in its HTML: "likely" or "possibly"
+   * JS-rendered, with the observed signals. Null if the page couldn't be read.
+   */
+  jsRendering: JsRenderingEvidence | null;
   /** Number of prompt-injection findings on the page (labels are withheld when > 0). */
   injectionFindings: number;
 };
@@ -82,10 +85,10 @@ export async function crawlSiteForms(domain: string, extraPaths: string[] = []):
 
 function inspect(path: string, result: Awaited<ReturnType<typeof fetchSitePage>>["result"]): CrawledPage {
   if (!result.ok) {
-    return { path, status: null, error: result.error, forms: [], looksClientRendered: false, injectionFindings: 0 };
+    return { path, status: null, error: result.error, forms: [], jsRendering: null, injectionFindings: 0 };
   }
   if (result.status >= 400) {
-    return { path, status: result.status, forms: [], looksClientRendered: false, injectionFindings: 0 };
+    return { path, status: result.status, forms: [], jsRendering: null, injectionFindings: 0 };
   }
   const injectionFindings = scanForInjection(result.body).length;
   const forms = extractForms(result.body).map((form) => ({
@@ -97,7 +100,7 @@ function inspect(path: string, result: Awaited<ReturnType<typeof fetchSitePage>>
     path,
     status: result.status,
     forms,
-    looksClientRendered: looksClientRendered(result.body),
+    jsRendering: jsRenderingEvidence(result.body),
     injectionFindings,
   };
 }
