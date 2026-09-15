@@ -13,8 +13,8 @@ import { normalizeDomain } from "@/lib/domain";
  * extension free of login checks and extra permissions.
  */
 export default async function OpenSitePage(props: PageProps<"/dashboard/open">) {
-  const user = await requireUser();
   const { domain } = await props.searchParams;
+  const user = await requireUser(`/dashboard/open?domain=${encodeURIComponent(typeof domain === "string" ? domain : "")}`);
   const normalized = typeof domain === "string" ? normalizeDomain(domain) : null;
   if (!normalized?.ok) redirect("/dashboard");
 

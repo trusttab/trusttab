@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getSession } from "@/lib/auth";
+import { loginPath, safeNextPath } from "@/lib/next-path";
 
 export const metadata = { title: "Email verification — TrustTab" };
 
@@ -19,17 +20,20 @@ const errorMessages: Record<string, string> = {
  * appending `?error=CODE` if verification failed.
  */
 export default async function EmailVerifiedPage(props: PageProps<"/email-verified">) {
-  const { error } = await props.searchParams;
+  const { error, next: rawNext } = await props.searchParams;
   const code = typeof error === "string" ? error : undefined;
+  // Carried through from the page the user was trying to reach before signing up.
+  const next = safeNextPath(rawNext);
+  const loginHref = loginPath(next);
 
   if (!code) {
-    if (await getSession()) redirect("/dashboard");
+    if (await getSession()) redirect(next);
     return (
       <div className="mx-auto max-w-sm space-y-4">
         <h1 className="text-2xl font-semibold tracking-tight">Email verified</h1>
         <p className="text-zinc-700">Your email address is confirmed.</p>
         <Link
-          href="/login"
+          href={loginHref}
           className="inline-block rounded-md bg-zinc-900 px-4 py-2 font-medium text-white hover:bg-zinc-700"
         >
           Log in
@@ -43,7 +47,7 @@ export default async function EmailVerifiedPage(props: PageProps<"/email-verifie
       <h1 className="text-2xl font-semibold tracking-tight">Couldn&apos;t verify your email</h1>
       <p className="text-zinc-700">{errorMessages[code] ?? "Something went wrong with this verification link."}</p>
       <p className="text-sm text-zinc-600">
-        <Link href="/login" className="underline">
+        <Link href={loginHref} className="underline">
           Log in
         </Link>{" "}
         and we&apos;ll email you a new link.

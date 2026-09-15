@@ -9,7 +9,7 @@ import { requireUser } from "@/lib/auth";
 export const metadata = { title: "Dashboard — TrustTab" };
 
 export default async function DashboardPage() {
-  const user = await requireUser();
+  const user = await requireUser("/dashboard");
   const mySites = await db
     .select()
     .from(sites)

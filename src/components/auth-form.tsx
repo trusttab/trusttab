@@ -5,19 +5,23 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
-
-/** Where links in verification emails land (see src/app/email-verified). */
-const VERIFICATION_CALLBACK = "/email-verified";
+import { DEFAULT_NEXT_PATH } from "@/lib/next-path";
 
 /** Shared email/password form for /login and /signup. */
 export function AuthForm({
   mode,
   showForgotPassword = false,
+  next = DEFAULT_NEXT_PATH,
 }: {
   mode: "login" | "signup";
   /** Only when this deployment can send email; otherwise the reset flow is off. */
   showForgotPassword?: boolean;
+  /** Already-validated path (safeNextPath) to go to after signing in. */
+  next?: string;
 }) {
+  const nextQuery = next === DEFAULT_NEXT_PATH ? "" : `?next=${encodeURIComponent(next)}`;
+  // Where links in verification emails land (see src/app/email-verified), carrying `next`.
+  const verificationCallback = `/email-verified${nextQuery}`;
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -38,7 +42,7 @@ export function AuthForm({
         email,
         password,
         name: email.split("@")[0], // Better Auth requires a display name; we don't ask for one yet.
-        callbackURL: VERIFICATION_CALLBACK,
+        callbackURL: verificationCallback,
       });
       if (error) return fail(error.message);
       // No session token means email verification is required. (Better Auth
@@ -50,7 +54,7 @@ export function AuthForm({
         return;
       }
     } else {
-      const { error } = await authClient.signIn.email({ email, password, callbackURL: VERIFICATION_CALLBACK });
+      const { error } = await authClient.signIn.email({ email, password, callbackURL: verificationCallback });
       if (error?.code === "EMAIL_NOT_VERIFIED") {
         // Better Auth has just emailed a fresh verification link.
         setCheckInboxFor(email);
@@ -60,7 +64,7 @@ export function AuthForm({
       if (error) return fail(error.message);
     }
 
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 
@@ -82,7 +86,7 @@ export function AuthForm({
         </p>
         <p className="text-sm text-zinc-500">
           The link expires in an hour. Didn&apos;t get it? Check your spam folder, or{" "}
-          <Link href="/login" className="underline" onClick={() => setCheckInboxFor(null)}>
+          <Link href={`/login${nextQuery}`} className="underline" onClick={() => setCheckInboxFor(null)}>
             log in
           </Link>{" "}
           again to get a new one.
@@ -142,11 +146,11 @@ export function AuthForm({
       <p className="text-sm text-zinc-600">
         {isSignup ? (
           <>
-            Already have an account? <Link href="/login" className="underline">Log in</Link>
+            Already have an account? <Link href={`/login${nextQuery}`} className="underline">Log in</Link>
           </>
         ) : (
           <>
-            New to TrustTab? <Link href="/signup" className="underline">Create an account</Link>
+            New to TrustTab? <Link href={`/signup${nextQuery}`} className="underline">Create an account</Link>
           </>
         )}
       </p>

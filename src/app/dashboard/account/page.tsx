@@ -11,7 +11,7 @@ import { emailEnabled, requireUser } from "@/lib/auth";
 export const metadata = { title: "Account — TrustTab" };
 
 export default async function AccountPage() {
-  const user = await requireUser();
+  const user = await requireUser("/dashboard/account");
   const mySites = await db
     .select({
       domain: sites.domain,

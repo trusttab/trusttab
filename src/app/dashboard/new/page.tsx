@@ -5,8 +5,8 @@ import { normalizeDomain } from "@/lib/domain";
 export const metadata = { title: "Claim a domain — TrustTab" };
 
 export default async function NewSitePage(props: PageProps<"/dashboard/new">) {
-  await requireUser();
   const { domain } = await props.searchParams;
+  await requireUser(typeof domain === "string" ? `/dashboard/new?domain=${encodeURIComponent(domain)}` : "/dashboard/new");
   const initialDomain = typeof domain === "string" ? normalizeDomain(domain) : null;
   return (
     <div className="mx-auto max-w-lg space-y-6">

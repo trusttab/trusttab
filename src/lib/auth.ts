@@ -19,6 +19,7 @@ import {
   passwordResetEmail,
   verificationEmail,
 } from "@/lib/email-templates";
+import { loginPath } from "@/lib/next-path";
 import { authRateLimitStorage } from "@/lib/rate-limit";
 
 /**
@@ -170,9 +171,12 @@ export async function getSession() {
  * For server components: returns the signed-in user or redirects to /login.
  * Call this in every protected page — layouts alone are not a sufficient
  * auth boundary in the App Router.
+ *
+ * Pass the page's own path (with any query string) as `returnTo` so the user
+ * lands back there after logging in, e.g. from a browser-extension link.
  */
-export async function requireUser() {
+export async function requireUser(returnTo?: string) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) redirect(returnTo ? loginPath(returnTo) : "/login");
   return session.user;
 }

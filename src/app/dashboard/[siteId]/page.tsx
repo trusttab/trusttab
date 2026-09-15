@@ -19,8 +19,8 @@ import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpi
 import { verificationSnippet } from "@/lib/ownership";
 
 export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) {
-  const user = await requireUser();
   const { siteId } = await props.params;
+  const user = await requireUser(`/dashboard/${encodeURIComponent(siteId)}`);
   if (!isUuid(siteId)) notFound();
 
   const [site] = await db
