@@ -454,3 +454,107 @@ main {
   font-size: 12px;
 }
 
+/*
+ * Summary badge for the concrete safety checks. Its own green/amber/red
+ * scale, deliberately unlike the verification tab's status colours: this
+ * answers "did these checks find anything", not "is this site verified".
+ */
+.safety {
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--safety-edge);
+  border-radius: 8px;
+  background: var(--safety-bg);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.safety[data-tier="green"] {
+  --safety-edge: #10b981;
+  --safety-bg: #ecfdf5;
+  --safety-fg: #065f46;
+}
+
+.safety[data-tier="yellow"] {
+  --safety-edge: #f59e0b;
+  --safety-bg: #fffbeb;
+  --safety-fg: #78350f;
+}
+
+.safety[data-tier="red"] {
+  --safety-edge: #dc2626;
+  --safety-bg: #fef2f2;
+  --safety-fg: #7f1d1d;
+}
+
+@media (prefers-color-scheme: dark) {
+  .safety[data-tier="green"] {
+    --safety-bg: #052e22;
+    --safety-fg: #a7f3d0;
+  }
+
+  .safety[data-tier="yellow"] {
+    --safety-bg: #3b2a06;
+    --safety-fg: #fde68a;
+  }
+
+  .safety[data-tier="red"] {
+    --safety-bg: #3f0d0d;
+    --safety-fg: #fecaca;
+  }
+}
+
+.safety-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--safety-fg);
+}
+
+.safety-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--safety-edge);
+  flex: none;
+}
+
+.safety-summary {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--safety-fg);
+}
+
+.safety-findings {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.safety-findings li {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.safety-findings strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.safety-findings p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.safety-findings .safety-quote {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+

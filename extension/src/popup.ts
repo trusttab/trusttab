@@ -15,7 +15,10 @@ import {
   type ImageBytes,
   type ImageCandidate,
 } from "./image-check";
+import { checkLookalike, describeLookalike } from "./lookalike";
 import { describeProvenance, findUnsignedAiMetadata, type CredentialsResult } from "./provenance";
+import { summarizeSafety, type SafetyFinding } from "./safety-badge";
+import { collectRequestBlocks, findSensitiveRequest } from "./sensitive-request";
 import { requestTextEstimate } from "./text-estimate";
 import { extractMainText } from "./text-extract";
 import { WIDGET_SIGNATURES } from "./widget-signatures";
@@ -159,6 +162,89 @@ function renderWidgetCheck(outcome: WidgetCheckOutcome) {
     }),
   );
   list.hidden = display.items.length === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Concrete safety checks and the summary badge
+
+const MAX_REQUEST_BLOCKS = 20;
+const MAX_REQUEST_CHARS = 4000;
+
+/**
+ * Runs the deterministic checks when the AI Check tab is opened: a
+ * sensitive-info request in the page's chat/form text, and a domain that
+ * resembles a frequently spoofed brand. Both run entirely in the browser,
+ * with no network calls and no model judgment.
+ */
+async function runSafetyChecks(pageHost: string, tabId?: number): Promise<SafetyFinding[]> {
+  const findings: SafetyFinding[] = [];
+
+  let blocks: string[] = [];
+  if (tabId !== undefined) {
+    try {
+      const [injection] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: collectRequestBlocks,
+        args: [selectorsFor(WIDGET_SIGNATURES), MAX_REQUEST_BLOCKS, MAX_REQUEST_CHARS],
+      });
+      blocks = injection?.result ?? [];
+    } catch {
+      blocks = [];
+    }
+  } else {
+    // Development preview: `?requestText=` stands in for the page's chat/form text.
+    const text = new URLSearchParams(location.search).get("requestText");
+    blocks = text ? [text] : [];
+  }
+
+  const request = findSensitiveRequest(blocks);
+  if (request) {
+    findings.push({
+      check: "sensitive-request",
+      title: `This page's chat or form asks for: ${request.requested.join(", ")}`,
+      details: [
+        `Alongside urgency language: ${request.urgency.join(", ")}.`,
+        `Found: “${request.quote}”`,
+        `Legitimate support rarely asks for this unprompted. Check you're really dealing with ${pageHost || "this site"} before sharing anything.`,
+      ],
+    });
+  }
+
+  const lookalike = pageHost ? checkLookalike(pageHost) : null;
+  if (lookalike) {
+    findings.push({
+      check: "domain-lookalike",
+      title: describeLookalike(lookalike),
+      details: ["Compared against a bundled list of frequently spoofed brands. A similar name is a similarity, not proof of anything by itself."],
+    });
+  }
+
+  return findings;
+}
+
+function renderSafetyBadge(findings: SafetyFinding[]) {
+  const summary = summarizeSafety(findings);
+  const badge = $("safety-badge");
+  badge.dataset.tier = summary.tier;
+  badge.hidden = false;
+  $("safety-title").textContent = summary.title;
+  $("safety-summary").textContent = summary.summary;
+  $("safety-findings").replaceChildren(
+    ...summary.findings.map((finding) => {
+      const li = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = finding.title;
+      li.append(title);
+      for (const detail of finding.details) {
+        const p = document.createElement("p");
+        // Page text, shown verbatim: textContent only.
+        p.textContent = detail;
+        if (detail.startsWith("Found:")) p.className = "safety-quote";
+        li.append(p);
+      }
+      return li;
+    }),
+  );
 }
 
 /**
@@ -410,6 +496,24 @@ function setupImageCheck() {
   });
 }
 
+/** The active tab's host and id, or the preview's `?url=` host. */
+async function currentPageHost(): Promise<{ host: string; tabId?: number }> {
+  if (!inExtension()) {
+    try {
+      return { host: new URL(new URLSearchParams(location.search).get("url") ?? "").hostname };
+    } catch {
+      return { host: "" };
+    }
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return { host: "" };
+  try {
+    return { host: new URL(tab.url!).hostname, tabId: tab.id };
+  } catch {
+    return { host: "" };
+  }
+}
+
 let widgetCheckStarted = false;
 
 function setupTabs() {
@@ -424,6 +528,7 @@ function setupTabs() {
       if (tab.id === "tab-ai" && !widgetCheckStarted) {
         widgetCheckStarted = true;
         void checkWidgets().then(renderWidgetCheck);
+        void currentPageHost().then(async ({ host, tabId }) => renderSafetyBadge(await runSafetyChecks(host, tabId)));
       }
     });
   }

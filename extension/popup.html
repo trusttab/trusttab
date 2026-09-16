@@ -35,6 +35,17 @@
       </section>
 
       <section id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>
+        <!--
+          Summary badge: a mechanical function of how many independent concrete
+          checks fired (none / one / two or more). AI detection and the model
+          estimates never feed it.
+        -->
+        <div id="safety-badge" class="safety" data-tier="green" aria-live="polite" hidden>
+          <p class="safety-heading"><span class="safety-dot" aria-hidden="true"></span><span id="safety-title"></span></p>
+          <p id="safety-summary" class="safety-summary"></p>
+          <ul id="safety-findings" class="safety-findings"></ul>
+        </div>
+
         <div id="ai-card" class="ai-card" data-state="loading" aria-live="polite" aria-busy="true">
           <p class="ai-kicker">AI Check · AI apps &amp; chat widgets</p>
           <h1 id="ai-title">Inspecting this page…</h1>

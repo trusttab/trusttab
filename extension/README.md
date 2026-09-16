@@ -13,6 +13,32 @@ verified by TrustTab.
     verification expired. If a check found content that could mislead AI
     agents, the popup says so explicitly.
   - **Not verified** (grey): no information. This is neutral, never a warning.
+- **AI Check** opens with a **summary badge** for the concrete safety checks
+  below: green ("No concerns found in our checks", which is not a promise the
+  page is safe), yellow ("Something to review") when exactly one check fired,
+  or red ("Multiple signs of a possible scam") when two or more *different*
+  checks fired. The colour is a mechanical count of which checks fired, never
+  a judgment of severity, and every finding is listed under the badge. Two
+  checks feed it:
+  - **Sensitive-info request**: a chat or form on the page asks for something
+    credential-shaped (password, PIN, one-time code, full card number, CVV,
+    Social Security number, bank details, wallet recovery phrase, remote
+    access) **and** applies urgency (suspension, "act now", a deadline, a
+    threat of loss). Either alone is normal and never reported. Blocks that
+    warn about such requests ("we will never ask for your password") are
+    excluded. The finding quotes the page's own words.
+  - **Domain lookalike**: the page's domain resembles a frequently spoofed
+    brand's domain without being it, by homoglyph or typo substitution
+    (`paypa1.com`, `arnazon.com`, internationalized domains are decoded
+    first), a near-miss ending (`paypal.co`), or the brand's name as a
+    separate part of another domain (`paypal-secure.com`,
+    `paypal.com.login-check.net`). Brand domains and their subdomains never
+    match. Names that are ordinary words (apple, target, chase) only match on
+    near-miss spellings, so `apple-pie-recipes.com` is not a finding.
+
+  Detecting AI applications, AI agent widgets, chat widgets, or anything from
+  the writing and image estimates **never** affects the badge: AI use is
+  reported as a fact, not as a safety concern.
 - **AI Check** is a separate feature, deliberately kept apart from
   verification (its own violet styling, never green/blue/yellow). Today it
   detects AI applications and chat widgets on the page:
@@ -148,7 +174,8 @@ the two can't drift apart.
 ## Adding a chat or AI widget provider
 
 Append an entry to `src/widget-signatures.ts`. That list is the only place
-providers are defined. For an AI application, use `kind: "ai_application"`
+providers are defined. Spoofed brands for the domain-lookalike check live in
+`src/lookalike-brands.ts` the same way, and both go stale over time. For an AI application, use `kind: "ai_application"`
 with `pageDomains` (the domains the app itself runs on); it matches the
 page's own address, so visiting another site that merely loads something
 from it never counts. For widgets, use hosts only if loading anything from
@@ -171,6 +198,10 @@ extension/
   src/image-check.ts   image listing, reading image bytes, estimate request
   src/c2pa-worker.ts   worker that validates Content Credentials (c2pa-rs WebAssembly)
   src/provenance.ts    credentials/metadata interpretation, unsigned AI markers, tier wording
+  src/sensitive-request.ts  credential-request + urgency patterns, in-page text collection
+  src/lookalike.ts     domain similarity checks (punycode, homoglyphs, edit distance)
+  src/lookalike-brands.ts   the list of frequently spoofed brands
+  src/safety-badge.ts  green/yellow/red summary, a count of which checks fired
   trust/               committed C2PA trust lists (update: node extension/update-trust-lists.mjs)
   build.mjs          esbuild bundle → dist/
   make-icons.mjs     generates icons/ (no image dependencies)

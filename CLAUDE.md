@@ -700,6 +700,56 @@ rather than silently changing direction.
   - **Not covered:** Google SynthID (needs Google's detector), CSS background
     images, and images inside iframes.
 
+- **2026-09-15 — AI Check additions (AI_CHECK_ADDITIONS_SPEC.md): safety
+  checks and summary badge.** Addition 1 (native AI platforms) shipped
+  earlier the same day; see the entry above.
+  - **Addition 2, sensitive-info request** (`extension/src/sensitive-request.ts`):
+    fires only when one block of chat/form text both asks for something
+    credential-shaped and applies urgency. Explicit pattern lists (the only
+    place they're defined), plus negation patterns so security notices ("we
+    will never ask for your password") never fire. The finding quotes the
+    page's own words and states what was found, never a verdict. Limitation:
+    chat widgets that render in cross-origin iframes (Intercom, Drift) can't
+    be read, so this sees only same-document chat and forms.
+  - **Addition 3, fake countdown timer: NOT BUILT** (spec asked for a
+    feasibility call first). Two blocking reasons. (a) The test as specified
+    has the wrong sign for the common case: "evergreen" timers store a
+    per-visitor deadline in localStorage or a cookie, so they *survive*
+    reloads and would be reported as genuine, while a real server-rendered
+    deadline that is re-rendered per load can look like a reset. (b) The
+    architecture can't run the test: the extension only acts on click, keeps
+    no state between popup opens, and reloading the user's tab would be a
+    destructive side effect (lost form input, re-submitted posts). Detecting
+    that a countdown is *running* is easy; deciding it is *fake* is not
+    reliable, and a false read here would undermine the evidence-based trust
+    every other check depends on. A per-visitor-deadline check (countdown
+    displayed + a stored deadline matching it) was considered and rejected
+    too: genuine per-user deadlines exist (cart holds, booking holds, exam
+    timers), so it would flag real ones.
+  - **Addition 4, domain lookalike** (`extension/src/lookalike.ts`,
+    `lookalike-brands.ts`): registrable-domain comparison against a bundled
+    brand list, with punycode decoding, homoglyph/confusable normalization
+    (Cyrillic and Greek, digit substitutions, rn→m, vv→w) and
+    Damerau-Levenshtein distance. Three match kinds: character substitution,
+    near-miss ending, and brand-name-in-another-domain. A brand's own domains
+    and subdomains never match, and `commonWord` brands (apple, target,
+    chase, visa...) are excluded from name-in-domain matching so
+    "apple-pie-recipes.com" stays clean. Tests pin the false-positive cases.
+  - **Summary badge** (`extension/src/safety-badge.ts`): green / yellow / red
+    as a mechanical count of *distinct* checks that fired (0 / 1 / 2+).
+    Severity is never weighed, two findings from the same check stay yellow,
+    and all findings are listed under the badge.
+  - **Deviation from the spec, flagged:** the spec's yellow tier lists "or a
+    flagged widget" as a trigger. Widget and AI-application detection do not
+    feed the badge, because the same spec forbids folding AI use into a
+    safety signal ("No 'AI-made = suspicious' framing"). Only Additions 2 and
+    4 feed it today, so red currently requires exactly that pair.
+  - **Colour note:** this badge introduces green/amber/red inside AI Check,
+    while Mode 1 verification deliberately avoids red (an unverified site is
+    an unknown, not a warning). The two live in separate tabs with different
+    shapes, and the badge answers "did these checks find anything", not "is
+    this site verified".
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -739,6 +789,11 @@ publish.
 - Manifests published before the self-attestation fields existed are served
   as-is until their next re-check, and they don't validate against the
   current schema. Only leasetab.com's is affected.
+- The spoofed-brand list for the domain-lookalike check
+  (`extension/src/lookalike-brands.ts`) goes stale: brands change domains and
+  new ones get targeted. It needs periodic review, like the widget signatures
+  and the C2PA trust lists. It is also deliberately small, so most lookalike
+  domains in the wild will not match any brand on it.
 - Extension widget signatures: Crisp, Drift, HubSpot chat, Freshchat,
   Voiceflow and Ada are verified only against their embed documentation, not
   live-tested, because their own sites don't run their standard widget.
