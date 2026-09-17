@@ -28,3 +28,13 @@ export const TIER_NOTES: Record<AgentTier, string> = {
 
 export const REGISTRY_SCOPE_NOTE =
   "This covers requests to TrustTab's own endpoints for this site — its manifest and registry lookups — not visits to the site itself.";
+
+export const SITE_SCOPE_NOTE = "This covers requests to your own pages, as reported by the collector you installed.";
+
+/** Shown before anyone turns site-wide collection on, so the choice is informed. */
+export const COLLECTION_DISCLOSURE = [
+  "This is a bigger scope than the traffic above: it covers every request to your site, not just TrustTab lookups.",
+  "Each request your collector reports sends the URL, the method, the visitor's IP and four headers (user agent and the three signature headers). No cookies, query strings, form fields or page content are sent.",
+  "TrustTab uses the IP in memory to match published agent ranges, then stores it coarsened (IPv4 /24, IPv6 /48). Rows are deleted after 30 days.",
+  "Logging visitor data can carry obligations of its own (GDPR and similar). Check what your privacy notice says before turning this on.",
+];

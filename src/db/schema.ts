@@ -140,6 +140,16 @@ export const sites = pgTable(
     ownershipVerifiedAt: timestamp("ownership_verified_at", { withTimezone: true }),
     status: siteStatus("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Site-wide agent traffic collection (see siteAgentHits). Opt-in: null
+     * until the owner turns it on, after reading what it collects.
+     */
+    agentTrafficEnabledAt: timestamp("agent_traffic_enabled_at", { withTimezone: true }),
+    /**
+     * SHA-256 of the collector's token secret; the token itself is shown to
+     * the owner once, at enable time, and never stored.
+     */
+    agentTrafficTokenHash: text("agent_traffic_token_hash"),
   },
   (t) => [
     index("sites_user_id_idx").on(t.userId),
@@ -285,6 +295,32 @@ export const manifestHits = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
+);
+
+/**
+ * Agent traffic to a site's *own* pages, reported by a collector the owner
+ * installs (see collectors/). Separate from `manifest_hits` on purpose: this
+ * is a larger, more sensitive scope — all traffic to a site, not just
+ * TrustTab lookups — so it is opt-in per site and lives in its own table.
+ */
+export const siteAgentHits = pgTable(
+  "site_agent_hits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** Request path only, capped; never the query string. */
+    path: text("path"),
+    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "trusttab" | "unclassified">().notNull(),
+    agentIdentity: text("agent_identity"),
+    agentSignal: text("agent_signal"),
+    /** Coarsened client IP (IPv4 /24, IPv6 /48); the full address is never stored. */
+    requesterIp: text("requester_ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("site_agent_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
 );
 
 /** Fixed-window request counters for rate limiting: public endpoints and auth (see src/lib/rate-limit.ts). */

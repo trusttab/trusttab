@@ -16,7 +16,7 @@ import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { getAssistantChanges, getOrCreateDraft } from "@/lib/drafts";
 import { manifestToInput } from "@/lib/manifest/input";
-import { getAgentTraffic, parseRange } from "@/lib/agent-traffic/queries";
+import { getAgentTraffic, getSiteAgentTraffic, parseRange } from "@/lib/agent-traffic/queries";
 import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
 import { verificationSnippet } from "@/lib/ownership";
 
@@ -32,16 +32,17 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
   if (!site) notFound();
 
   const agentDays = parseRange((await props.searchParams).agentDays);
-  const [latest, lastRun, traffic, agentTraffic, draft, assistantChanges] = site.ownershipVerifiedAt
+  const [latest, lastRun, traffic, agentTraffic, siteAgentTraffic, draft, assistantChanges] = site.ownershipVerifiedAt
     ? await Promise.all([
         getLatestManifest(site.id),
         getLatestVerificationRun(site.id),
         getTraffic(site.id),
         getAgentTraffic(site.id, agentDays),
+        site.agentTrafficEnabledAt ? getSiteAgentTraffic(site.id, agentDays) : Promise.resolve(null),
         getOrCreateDraft(site.id),
         getAssistantChanges(site.id),
       ])
-    : [undefined, undefined, undefined, undefined, undefined, []];
+    : [undefined, undefined, undefined, undefined, null, undefined, []];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -100,7 +101,14 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
       {site.verificationId && issuerUrl && (
         <BadgeSnippet issuerUrl={issuerUrl} verificationId={site.verificationId} />
       )}
-      {agentTraffic && latest && <AgentTraffic siteId={site.id} summary={agentTraffic} />}
+      {agentTraffic && latest && (
+        <AgentTraffic
+          siteId={site.id}
+          summary={agentTraffic}
+          siteSummary={siteAgentTraffic ?? null}
+          collectionEnabled={site.agentTrafficEnabledAt !== null}
+        />
+      )}
       {traffic && latest && <TrafficLog hits={traffic.hits} counts={traffic.counts} />}
     </div>
   );

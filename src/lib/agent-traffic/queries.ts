@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, gte, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { manifestHits } from "@/db/schema";
+import { manifestHits, siteAgentHits } from "@/db/schema";
 
 import type { AgentTier } from "./classify";
 
@@ -20,6 +20,8 @@ export type AgentGroup = { identity: string; signal: string | null; requests: nu
 
 export type AgentTrafficSummary = {
   days: AgentTrafficRange;
+  /** Which traffic this summarizes: TrustTab's endpoints, or the site's own pages. */
+  source: "registry" | "site";
   /** Requests per tier, including rows recorded before classification existed (counted as unclassified). */
   totals: Record<AgentTier, number>;
   total: number;
@@ -33,38 +35,19 @@ export type AgentTrafficSummary = {
  * source: it works for every site regardless of how it is hosted, because the
  * requests arrive at TrustTab rather than at the site.
  */
-export async function getAgentTraffic(siteId: string, days: AgentTrafficRange): Promise<AgentTrafficSummary> {
-  const since = sql`now() - make_interval(days => ${days})`;
-  const inRange = and(eq(manifestHits.siteId, siteId), gte(manifestHits.createdAt, since));
-
-  const [tierRows, groupRows] = await Promise.all([
-    db
-      .select({ tier: manifestHits.agentTier, count: sql<number>`count(*)::int` })
-      .from(manifestHits)
-      .where(inRange)
-      .groupBy(manifestHits.agentTier),
-    db
-      .select({
-        tier: manifestHits.agentTier,
-        identity: manifestHits.agentIdentity,
-        signal: manifestHits.agentSignal,
-        requests: sql<number>`count(*)::int`,
-        lastSeen: sql<Date>`max(${manifestHits.createdAt})`,
-      })
-      .from(manifestHits)
-      .where(inRange)
-      .groupBy(manifestHits.agentTier, manifestHits.agentIdentity, manifestHits.agentSignal)
-      .orderBy(sql`count(*) desc`),
-  ]);
-
+async function summarize(
+  source: "registry" | "site",
+  days: AgentTrafficRange,
+  rows: { tier: string | null; identity: string | null; signal: string | null; requests: number; lastSeen: Date }[],
+): Promise<AgentTrafficSummary> {
   const totals: Record<AgentTier, number> = { verified: 0, likely_automated: 0, trusttab: 0, unclassified: 0 };
-  for (const row of tierRows) {
+  for (const row of rows) {
     // Rows from before classification existed have no tier; they are unclassified.
-    totals[(row.tier ?? "unclassified") as AgentTier] += row.count;
+    totals[(row.tier ?? "unclassified") as AgentTier] += row.requests;
   }
 
   const groupsFor = (tier: AgentTier): AgentGroup[] =>
-    groupRows
+    rows
       .filter((row) => row.tier === tier)
       .map((row) => ({
         identity: row.identity ?? "Unnamed",
@@ -75,9 +58,51 @@ export async function getAgentTraffic(siteId: string, days: AgentTrafficRange): 
 
   return {
     days,
+    source,
     totals,
     total: Object.values(totals).reduce((sum, count) => sum + count, 0),
     verified: groupsFor("verified"),
     likelyAutomated: groupsFor("likely_automated"),
   };
+}
+
+/**
+ * Agent traffic to TrustTab's public endpoints for one site (its manifest and
+ * registry lookups). This is the no-install source: it works for every site
+ * regardless of hosting, because the requests arrive at TrustTab.
+ */
+export async function getAgentTraffic(siteId: string, days: AgentTrafficRange): Promise<AgentTrafficSummary> {
+  const rows = await db
+    .select({
+      tier: manifestHits.agentTier,
+      identity: manifestHits.agentIdentity,
+      signal: manifestHits.agentSignal,
+      requests: sql<number>`count(*)::int`,
+      lastSeen: sql<Date>`max(${manifestHits.createdAt})`,
+    })
+    .from(manifestHits)
+    .where(and(eq(manifestHits.siteId, siteId), gte(manifestHits.createdAt, sql`now() - make_interval(days => ${days})`)))
+    .groupBy(manifestHits.agentTier, manifestHits.agentIdentity, manifestHits.agentSignal)
+    .orderBy(sql`count(*) desc`);
+  return summarize("registry", days, rows);
+}
+
+/**
+ * Agent traffic to the site's own pages, as reported by an installed
+ * collector. Only exists for sites whose owner turned collection on.
+ */
+export async function getSiteAgentTraffic(siteId: string, days: AgentTrafficRange): Promise<AgentTrafficSummary> {
+  const rows = await db
+    .select({
+      tier: siteAgentHits.agentTier,
+      identity: siteAgentHits.agentIdentity,
+      signal: siteAgentHits.agentSignal,
+      requests: sql<number>`count(*)::int`,
+      lastSeen: sql<Date>`max(${siteAgentHits.createdAt})`,
+    })
+    .from(siteAgentHits)
+    .where(and(eq(siteAgentHits.siteId, siteId), gte(siteAgentHits.createdAt, sql`now() - make_interval(days => ${days})`)))
+    .groupBy(siteAgentHits.agentTier, siteAgentHits.agentIdentity, siteAgentHits.agentSignal)
+    .orderBy(sql`count(*) desc`);
+  return summarize("site", days, rows);
 }
