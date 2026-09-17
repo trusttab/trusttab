@@ -272,6 +272,16 @@ export const manifestHits = pgTable(
     /** Coarsened client IP (IPv4 /24, IPv6 /48); never the full address. */
     requesterIp: text("requester_ip"),
     userAgent: text("user_agent"),
+    /**
+     * Agent classification of the request (src/lib/agent-traffic/classify.ts).
+     * "verified" is a checked signature; "likely_automated" is an estimate.
+     * Null on rows written before classification existed.
+     */
+    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "trusttab" | "unclassified">(),
+    /** The signed identity, or the operator a heuristic matched. */
+    agentIdentity: text("agent_identity"),
+    /** The evidence for the classification, in plain words. */
+    agentSignal: text("agent_signal"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
