@@ -750,6 +750,72 @@ rather than silently changing direction.
     shapes, and the badge answers "did these checks find anything", not "is
     this site verified".
 
+- **2026-09-17 — Agent traffic detection (AGENT_TRAFFIC_DETECTION_SPEC.md).**
+  The spec asked for a feasibility check per hosting category first. What it
+  found, and what was built on it:
+  - **No-code platforms expose nothing server-side (checked, not assumed).**
+    On leasetab.com (Base44) every unknown path returns the app's HTML, and
+    owner code runs only at `/functions/<name>`, a separate endpoint namespace
+    (confirmed live: `/functions/x` returns "Backend function not found").
+    Page requests never reach code the owner controls. Base44's own analytics
+    are client-side (a `/track-click` beacon), so an agent fetching raw HTML
+    leaves no trace the owner can see either. This is a permanent limitation
+    for a meaningful part of the ICP, not a temporary gap.
+  - **"Behind Cloudflare" does not mean the owner has Cloudflare.**
+    leasetab.com resolves to Render (`base44.onrender.com` →
+    `…cdn.cloudflare.net`), so that Cloudflare zone belongs to Render/Base44.
+    The owner controls DNS at their registrar only.
+  - **Cloudflare's paid classification is out of reach for the ICP.**
+    `cf.bot_management.signed_agent` requires Enterprise with Bot Management;
+    it is unavailable on Free, Pro and Business. So the reuse is Cloudflare's
+    open-source implementation, not their API: the extension-style "reuse over
+    rebuild" still applies, one level down.
+  - **Tier 1 uses `web-bot-auth` (Apache-2.0), not a hand-rolled RFC 9421
+    verifier.** Proven end to end before building: a signed request verifies,
+    and the same signature replayed against another host is rejected because
+    the signature covers the target authority. Directory discovery goes
+    through `safe-fetch` (the `Signature-Agent` header is attacker-controlled,
+    so this would otherwise be an SSRF and amplification vector), with a
+    6-hour cache, a 15-minute negative cache, and a per-instance budget of 60
+    directory fetches per 10 minutes. Only Ed25519 is supported, which is what
+    the published directories use.
+  - **Coverage, measured on 2026-09-17:** `chatgpt.com` publishes 1 key and
+    `agent.bot.goog` publishes 5. Perplexity and Anthropic publish nothing at
+    their obvious hosts. The UI says plainly that most agent traffic is
+    unsigned and that no signature means nothing.
+  - **Tier 2 is an estimate, from two signals:** a known agent user agent
+    (`src/lib/agent-traffic/agents.ts`) and an IP inside a range the operator
+    publishes (`ranges.json`, refreshed by
+    `scripts/update-agent-ranges.mjs`; OpenAI, Google and Perplexity publish
+    these, Anthropic doesn't). **Deliberately not built:** generic
+    AWS/GCP/Azure datacenter matching. Those lists are megabytes, and cloud
+    origin is exactly where uptime monitors, scanners and consumer VPNs live,
+    so it would flag people as agents. TrustTab's own fetches get their own
+    tier so a site's checks aren't counted as visitors.
+  - **Order built (owner decision):** registry traffic first, since it works
+    for every customer with nothing installed — requests to a site's manifest
+    and registry entry arrive at TrustTab. Then opt-in site-wide collection.
+  - **Opt-in, per site.** `sites.agent_traffic_enabled_at` plus a token whose
+    secret is stored only as a SHA-256 hash and shown once. Site-wide rows
+    live in their own table (`site_agent_hits`), not mixed into
+    `manifest_hits`, so the privacy boundary is visible in the schema.
+    Disabling invalidates the token; collected rows age out under the same
+    30-day retention. Visitor IPs reach TrustTab (they must, to match
+    published ranges), are used in memory, and are stored coarsened (/24,
+    /48) exactly like the existing traffic log.
+  - **Collectors** (`collectors/`): a Cloudflare Worker and a Node/Next.js
+    function, both first-class. They forward only the URL, method, IP, user
+    agent and the three signature headers, never cookies, query strings or
+    content, and report after the response. Verification stays server-side so
+    there is one implementation.
+  - **No-code customers get the honest option, not a dead end:**
+    `collectors/README.md` documents moving DNS to their own Cloudflare zone
+    in front of the host (Render documents this pattern), with the trade-offs
+    stated. It is opt-in instructions, never the default.
+  - **The panel never claims a human.** There is no "human traffic" figure,
+    because nothing here can establish one; unmatched requests are
+    "Unclassified" with a note saying exactly that.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -798,6 +864,21 @@ publish.
   Voiceflow and Ada are verified only against their embed documentation, not
   live-tested, because their own sites don't run their standard widget.
   Eventually live-test each against a real customer site. Not urgent.
+- **Logging visitor traffic may carry its own compliance obligations**
+  (GDPR and similar) that TrustTab hasn't dealt with before: site-wide
+  collection means a site owner sends their visitors' data to TrustTab, which
+  is a processor relationship. The build covers the technical side (opt-in,
+  disclosure before enabling, IP coarsening, 30-day deletion) and the UI tells
+  owners to check their own privacy notice, but there is no DPA, no data
+  processing terms, and no region controls. Worth legal review before this is
+  promoted to customers.
+- The agent IP ranges (`src/lib/agent-traffic/ranges.json`) and the agent
+  user-agent list go stale as operators change infrastructure; re-run
+  `scripts/update-agent-ranges.mjs` periodically. Anthropic publishes no IP
+  ranges, so ClaudeBot is only ever a user-agent match today.
+- Generic datacenter/cloud IP matching (AWS, GCP, Azure) is deliberately not
+  implemented; see the decision entry. If it is added later it needs a
+  separate, weaker label than the operator-published ranges.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

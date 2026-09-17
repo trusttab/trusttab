@@ -283,6 +283,7 @@ npm run dev                  # http://localhost:3000
 | `RESEND_API_KEY`, `EMAIL_FROM` | Sends account verification and password reset email via [Resend](https://resend.com). `EMAIL_FROM` must use a domain verified in Resend. Without them, `npm run dev` prints emails to the server log, and production builds **disable email verification and password reset** (with a startup warning) |
 | `ANTHROPIC_API_KEY`, `ASSISTANT_MODEL` | *Optional.* Enables the dashboard assistant (default model `claude-sonnet-5`) |
 | `AI_TEXT_MODEL`, `AI_IMAGE_MODEL`, `AI_CHECK_DAILY_CAP` | *Optional.* The extension's AI Check text and image estimates, which also need `ANTHROPIC_API_KEY` (models default to `claude-haiku-4-5-20251001`; one shared budget of 1000 checks/day across all clients) |
+| `TRUSTTAB_URL` (collectors) | *Optional.* Where an installed collector reports agent traffic; defaults to the hosted TrustTab (see `collectors/`) |
 | `AGENTTRUST_VERIFY_TOKEN` | *Optional.* Makes this deployment publish its own verification tag so it can claim its own domain |
 
 ### Deploying to Vercel
