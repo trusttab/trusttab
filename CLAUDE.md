@@ -811,7 +811,11 @@ rather than silently changing direction.
   - **No-code customers get the honest option, not a dead end:**
     `collectors/README.md` documents moving DNS to their own Cloudflare zone
     in front of the host (Render documents this pattern), with the trade-offs
-    stated. It is opt-in instructions, never the default.
+    stated. It is opt-in instructions, never the default. It includes a worked
+    example for leasetab.com with its real records (Namecheap nameservers,
+    apex A to Render's 216.24.57.1, `www` CNAME to `base44.onrender.com`, no
+    AAAA), the grey-cloud-first ordering that Render's certificate issuance
+    needs, and how to undo it.
   - **The panel never claims a human.** There is no "human traffic" figure,
     because nothing here can establish one; unmatched requests are
     "Unclassified" with a note saying exactly that.
@@ -864,7 +868,9 @@ publish.
   Voiceflow and Ada are verified only against their embed documentation, not
   live-tested, because their own sites don't run their standard widget.
   Eventually live-test each against a real customer site. Not urgent.
-- **Logging visitor traffic may carry its own compliance obligations**
+- **GDPR/DPA is a hard requirement before this is promoted beyond
+  leasetab.com** (owner decision, 2026-09-17), not a deferred item.
+  Logging visitor traffic carries its own compliance obligations
   (GDPR and similar) that TrustTab hasn't dealt with before: site-wide
   collection means a site owner sends their visitors' data to TrustTab, which
   is a processor relationship. The build covers the technical side (opt-in,
