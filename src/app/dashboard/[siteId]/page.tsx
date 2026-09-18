@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AgentActivityPanel } from "@/components/agent-activity";
+import { AgentTimelinePanel } from "@/components/agent-timeline";
 import { AgentTraffic } from "@/components/agent-traffic";
+import { OwnerAgents } from "@/components/owner-agents";
 import { BadgeSnippet } from "@/components/badge-snippet";
 import { OwnershipPanel } from "@/components/ownership-panel";
 import { SiteWorkspace } from "@/components/site-workspace";
@@ -17,7 +19,8 @@ import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { getAssistantChanges, getOrCreateDraft } from "@/lib/drafts";
 import { manifestToInput } from "@/lib/manifest/input";
-import { getAgentActivity, getAgentTraffic, getSiteAgentTraffic, parseRange } from "@/lib/agent-traffic/queries";
+import { ownerAgentsFor } from "@/lib/agent-traffic/collector";
+import { getAgentActivity, getAgentTimeline, getAgentTraffic, getAgentVolume, getSiteAgentTraffic, parseRange, windowLabel } from "@/lib/agent-traffic/queries";
 import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
 import { verificationSnippet } from "@/lib/ownership";
 
@@ -32,8 +35,13 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     .where(and(eq(sites.id, siteId), eq(sites.userId, user.id)));
   if (!site) notFound();
 
-  const agentDays = parseRange((await props.searchParams).agentDays);
-  const [latest, lastRun, traffic, agentTraffic, siteAgentTraffic, agentActivity, draft, assistantChanges] = site.ownershipVerifiedAt
+  const search = await props.searchParams;
+  const agentDays = parseRange(search.window);
+  // Only the owner reaches this page (the query above scopes by user), so the
+  // timeline and the owner's own agent labels are private by construction.
+  const selectedAgent = typeof search.agent === "string" ? search.agent.slice(0, 200) : null;
+  const [latest, lastRun, traffic, agentTraffic, siteAgentTraffic, agentActivity, agentVolume, agentTimeline, registeredAgents, draft, assistantChanges] =
+    site.ownershipVerifiedAt
     ? await Promise.all([
         getLatestManifest(site.id),
         getLatestVerificationRun(site.id),
@@ -41,10 +49,13 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
         getAgentTraffic(site.id, agentDays),
         site.agentTrafficEnabledAt ? getSiteAgentTraffic(site.id, agentDays) : Promise.resolve(null),
         site.agentTrafficEnabledAt ? getAgentActivity(site.id, agentDays) : Promise.resolve(null),
+        site.agentTrafficEnabledAt ? getAgentVolume(site.id, agentDays) : Promise.resolve(null),
+        site.agentTrafficEnabledAt && selectedAgent ? getAgentTimeline(site.id, selectedAgent, agentDays) : Promise.resolve([]),
+        ownerAgentsFor(site.id),
         getOrCreateDraft(site.id),
         getAssistantChanges(site.id),
       ])
-    : [undefined, undefined, undefined, undefined, null, null, undefined, []];
+    : [undefined, undefined, undefined, undefined, null, null, null, [], [], undefined, []];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -111,7 +122,11 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
           collectionEnabled={site.agentTrafficEnabledAt !== null}
         />
       )}
-      {agentActivity && latest && <AgentActivityPanel agents={agentActivity} days={agentDays} />}
+      {agentActivity && latest && <AgentActivityPanel agents={agentActivity} windowText={windowLabel(agentDays)} />}
+      {agentVolume && latest && (
+        <AgentTimelinePanel siteId={site.id} range={agentDays} agents={agentVolume} selected={selectedAgent} requests={agentTimeline} />
+      )}
+      {site.ownershipVerifiedAt && latest && <OwnerAgents siteId={site.id} agents={registeredAgents} />}
       {traffic && latest && <TrafficLog hits={traffic.hits} counts={traffic.counts} />}
     </div>
   );

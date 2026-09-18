@@ -15,7 +15,7 @@ import { POST } from "@/app/api/agent-traffic/ingest/route";
 import { jwkToKeyID, sign } from "web-bot-auth";
 
 import { db } from "@/db";
-import { manifestEndpoints, manifests, siteAgentHits, sites, users } from "@/db/schema";
+import { manifestEndpoints, manifests, ownerAgents, siteAgentHits, sites, users } from "@/db/schema";
 import { issueCollectorToken, recordSiteHits, siteForCollectorToken } from "@/lib/agent-traffic/collector";
 
 const userId = `itest-traffic-${randomUUID()}`;
@@ -122,10 +122,9 @@ describe("POST /api/agent-traffic/ingest", () => {
  * recorded as a mismatch. The tamper-evidence this relies on is proven in
  * src/lib/agent-traffic/intent.test.ts.
  */
-describe("declared intent through ingest", () => {
-  const SITE_URL = "https://example.org";
+const SITE_URL = "https://example.org";
 
-  async function signedEvent(path: string, declaration: string | null) {
+async function signedEvent(path: string, declaration: string | null) {
     const { privateKey, publicKey } = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     const jwk = (await crypto.subtle.exportKey("jwk", publicKey)) as JsonWebKey & { kid?: string };
     const keyid = await jwkToKeyID(
@@ -149,17 +148,18 @@ describe("declared intent through ingest", () => {
       signatureAgentKey: "signature-agent",
       ...(declaration ? { additionalComponents: ["intent-declaration"] } : {}),
     });
-    return {
-      event: {
-        url: `${SITE_URL}${path}`,
-        method: "GET",
-        ip: "203.0.113.20",
-        headers: { ...headers, signature: fields.signature, "signature-input": fields.signatureInput },
-      },
-      keys: [{ ...jwk, kid: keyid }],
-    };
-  }
+  return {
+    event: {
+      url: `${SITE_URL}${path}`,
+      method: "GET",
+      ip: "203.0.113.20",
+      headers: { ...headers, signature: fields.signature, "signature-input": fields.signatureInput },
+    },
+    keys: [{ ...jwk, kid: keyid }],
+  };
+}
 
+describe("declared intent through ingest", () => {
   before(async () => {
     const [manifest] = await db
       .insert(manifests)
@@ -210,5 +210,46 @@ describe("declared intent through ingest", () => {
     assert.equal(row.agentTier, "verified");
     assert.equal(row.declaredIntent, null);
     assert.equal(row.scopeMismatch, null);
+  });
+});
+
+/**
+ * Owner-registered agents: the owner's own label for their own traffic. Lower
+ * bar than declared intent by design (there is nobody to deceive), but a
+ * verified signature still outranks it.
+ */
+describe("owner-registered agents", () => {
+  before(async () => {
+    await db.insert(ownerAgents).values({ siteId, name: "Lead Follow-up Bot", matchType: "user_agent", matchValue: "MyCompanyBot" });
+  });
+
+  test("traffic matching a registered signal is labelled with the owner's name for it", async () => {
+    await recordSiteHits(siteId, [
+      { url: "https://example.org/leads", method: "POST", ip: "203.0.113.31", headers: { "user-agent": "MyCompanyBot/2.1 (+built on Base44)" } },
+    ]);
+
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/leads"));
+    assert.equal(row.agentTier, "owner_identified");
+    assert.equal(row.agentIdentity, "Your agent: Lead Follow-up Bot");
+    assert.match(row.agentSignal ?? "", /you registered the user agent/);
+    assert.equal(row.method, "POST", "the timeline needs the method");
+  });
+
+  test("a verified signature outranks the owner's label", async () => {
+    const { event, keys } = await signedEvent("/leads-signed", null);
+    await recordSiteHits(siteId, [{ ...event, headers: { ...event.headers, "user-agent": "MyCompanyBot/2.1" } }], {
+      loadKeys: async () => keys,
+    });
+
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/leads-signed"));
+    assert.equal(row.agentTier, "verified");
+  });
+
+  test("traffic that matches nothing stays unclassified rather than borrowing a label", async () => {
+    await recordSiteHits(siteId, [
+      { url: "https://example.org/plain", ip: "203.0.113.32", headers: { "user-agent": "Mozilla/5.0 (Macintosh) Chrome/141.0.0.0" } },
+    ]);
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/plain"));
+    assert.equal(row.agentTier, "unclassified");
   });
 });

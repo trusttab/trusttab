@@ -16,11 +16,13 @@ traffic*, copy the token, then deploy a collector.
 
 ## What a collector sends
 
-Per request: the URL, the method, the visitor's IP, and five headers —
+Per request: the URL, the method, the visitor's IP, and six headers —
 `user-agent`, the Web Bot Auth signature headers (`signature`,
-`signature-input`, `signature-agent`) and `intent-declaration`, which is how
-an agent states what it came to do. TrustTab believes a declaration only when
-the agent's signature covers that header, so an unsigned one is ignored.
+`signature-input`, `signature-agent`), `intent-declaration`, which is how an
+agent states what it came to do, and `x-trusttab-agent`, which you can set on
+an agent you built yourself so its traffic carries your own label. TrustTab
+believes a declaration only when the agent's signature covers that header, so
+an unsigned one is ignored.
 
 It never sends cookies, query strings, form fields or page content. TrustTab
 uses the IP in memory to match published agent ranges and stores only a

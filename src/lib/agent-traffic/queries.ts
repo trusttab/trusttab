@@ -1,20 +1,28 @@
 import "server-only";
 
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { manifestHits, siteAgentHits } from "@/db/schema";
 
 import type { AgentTier } from "./classify";
+import type { TimelineRequest } from "./timeline";
 
-/** Time ranges offered by the panel. */
-export const AGENT_TRAFFIC_RANGES = [7, 30] as const;
-export type AgentTrafficRange = (typeof AGENT_TRAFFIC_RANGES)[number];
+/** Time windows offered by the panels. */
+export const AGENT_TRAFFIC_WINDOWS = ["24h", "48h", "7d", "30d"] as const;
+export type AgentTrafficRange = (typeof AGENT_TRAFFIC_WINDOWS)[number];
+
+const WINDOW_HOURS: Record<AgentTrafficRange, number> = { "24h": 24, "48h": 48, "7d": 24 * 7, "30d": 24 * 30 };
 
 export function parseRange(value: unknown): AgentTrafficRange {
-  const days = Number(value);
-  return (AGENT_TRAFFIC_RANGES as readonly number[]).includes(days) ? (days as AgentTrafficRange) : 7;
+  return (AGENT_TRAFFIC_WINDOWS as readonly unknown[]).includes(value) ? (value as AgentTrafficRange) : "7d";
 }
+
+export function windowLabel(range: AgentTrafficRange): string {
+  return { "24h": "last 24 hours", "48h": "last 48 hours", "7d": "last 7 days", "30d": "last 30 days" }[range];
+}
+
+const since = (range: AgentTrafficRange) => sql`now() - make_interval(hours => ${WINDOW_HOURS[range]})`;
 
 export type AgentGroup = { identity: string; signal: string | null; requests: number; lastSeen: Date };
 
@@ -40,7 +48,7 @@ async function summarize(
   days: AgentTrafficRange,
   rows: { tier: string | null; identity: string | null; signal: string | null; requests: number; lastSeen: Date }[],
 ): Promise<AgentTrafficSummary> {
-  const totals: Record<AgentTier, number> = { verified: 0, likely_automated: 0, trusttab: 0, unclassified: 0 };
+  const totals: Record<AgentTier, number> = { verified: 0, likely_automated: 0, owner_identified: 0, trusttab: 0, unclassified: 0 };
   for (const row of rows) {
     // Rows from before classification existed have no tier; they are unclassified.
     totals[(row.tier ?? "unclassified") as AgentTier] += row.requests;
@@ -81,7 +89,7 @@ export async function getAgentTraffic(siteId: string, days: AgentTrafficRange): 
       lastSeen: sql<Date>`max(${manifestHits.createdAt})`,
     })
     .from(manifestHits)
-    .where(and(eq(manifestHits.siteId, siteId), gte(manifestHits.createdAt, sql`now() - make_interval(days => ${days})`)))
+    .where(and(eq(manifestHits.siteId, siteId), gte(manifestHits.createdAt, since(days))))
     .groupBy(manifestHits.agentTier, manifestHits.agentIdentity, manifestHits.agentSignal)
     .orderBy(sql`count(*) desc`);
   return summarize("registry", days, rows);
@@ -101,7 +109,7 @@ export async function getSiteAgentTraffic(siteId: string, days: AgentTrafficRang
       lastSeen: sql<Date>`max(${siteAgentHits.createdAt})`,
     })
     .from(siteAgentHits)
-    .where(and(eq(siteAgentHits.siteId, siteId), gte(siteAgentHits.createdAt, sql`now() - make_interval(days => ${days})`)))
+    .where(and(eq(siteAgentHits.siteId, siteId), gte(siteAgentHits.createdAt, since(days))))
     .groupBy(siteAgentHits.agentTier, siteAgentHits.agentIdentity, siteAgentHits.agentSignal)
     .orderBy(sql`count(*) desc`);
   return summarize("site", days, rows);
@@ -131,7 +139,7 @@ export async function getAgentActivity(siteId: string, days: AgentTrafficRange, 
   const inRange = and(
     eq(siteAgentHits.siteId, siteId),
     eq(siteAgentHits.agentTier, "verified"),
-    gte(siteAgentHits.createdAt, sql`now() - make_interval(days => ${days})`),
+    gte(siteAgentHits.createdAt, since(days)),
   );
 
   const rows = await db
@@ -175,4 +183,70 @@ export async function getAgentActivity(siteId: string, days: AgentTrafficRange, 
     entry.paths = entry.paths.slice(0, 5);
   }
   return [...byIdentity.values()].sort((a, b) => b.requests - a.requests).slice(0, limit);
+}
+
+export type AgentVolume = {
+  identity: string;
+  tier: AgentTier;
+  requests: number;
+  distinctPaths: number;
+  lastSeen: Date;
+};
+
+/**
+ * Agents ranked by request volume on the site's own pages, the entry point to
+ * the session timeline. Only identified traffic appears: unclassified requests
+ * have no agent to rank, and TrustTab's own checks aren't visitors.
+ */
+export async function getAgentVolume(siteId: string, days: AgentTrafficRange, limit = 20): Promise<AgentVolume[]> {
+  const rows = await db
+    .select({
+      identity: siteAgentHits.agentIdentity,
+      tier: siteAgentHits.agentTier,
+      requests: sql<number>`count(*)::int`,
+      distinctPaths: sql<number>`count(distinct ${siteAgentHits.path})::int`,
+      lastSeen: sql<Date>`max(${siteAgentHits.createdAt})`,
+    })
+    .from(siteAgentHits)
+    .where(
+      and(
+        eq(siteAgentHits.siteId, siteId),
+        gte(siteAgentHits.createdAt, since(days)),
+        inArray(siteAgentHits.agentTier, ["verified", "likely_automated", "owner_identified"]),
+      ),
+    )
+    .groupBy(siteAgentHits.agentIdentity, siteAgentHits.agentTier)
+    .orderBy(sql`count(*) desc`)
+    .limit(limit);
+
+  return rows
+    .filter((row) => row.identity)
+    .map((row) => ({
+      identity: row.identity!,
+      tier: (row.tier ?? "unclassified") as AgentTier,
+      requests: row.requests,
+      distinctPaths: row.distinctPaths,
+      lastSeen: new Date(row.lastSeen),
+    }));
+}
+
+/** One agent's requests in time order, for the timeline view. Capped, newest last. */
+export async function getAgentTimeline(siteId: string, identity: string, days: AgentTrafficRange, limit = 500): Promise<TimelineRequest[]> {
+  const rows = await db
+    .select({
+      at: siteAgentHits.createdAt,
+      method: siteAgentHits.method,
+      path: siteAgentHits.path,
+      tier: siteAgentHits.agentTier,
+      declaredIntent: siteAgentHits.declaredIntent,
+      scopeMismatch: siteAgentHits.scopeMismatch,
+    })
+    .from(siteAgentHits)
+    .where(and(eq(siteAgentHits.siteId, siteId), eq(siteAgentHits.agentIdentity, identity), gte(siteAgentHits.createdAt, since(days))))
+    .orderBy(desc(siteAgentHits.createdAt))
+    .limit(limit);
+
+  return rows
+    .map((row) => ({ ...row, at: new Date(row.at), tier: (row.tier ?? "unclassified") as AgentTier }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
 }

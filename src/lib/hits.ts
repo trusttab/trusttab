@@ -7,7 +7,9 @@ import { db } from "@/db";
 import { manifestHits } from "@/db/schema";
 
 import { classifyRequest } from "./agent-traffic/classify";
+import { ownerAgentsFor } from "./agent-traffic/collector";
 import { formatDeclaration } from "./agent-traffic/intent";
+import { describeOwnerAgent, matchOwnerAgent, OWNER_AGENT_HEADER } from "./agent-traffic/owner-agents";
 import { anonymizeIp, clientIp } from "./ip";
 
 /** Traffic-log rows older than this are deleted. */
@@ -35,7 +37,14 @@ export function recordHit(request: Request, siteId: string, endpoint: "manifest"
 
   after(async () => {
     try {
-      const agent = await classifyRequest(request, ip);
+      let agent = await classifyRequest(request, ip);
+      if (agent.tier !== "verified" && agent.tier !== "trusttab") {
+        const owned = matchOwnerAgent(
+          { userAgent, ip, headerValue: request.headers.get(OWNER_AGENT_HEADER) },
+          await ownerAgentsFor(siteId),
+        );
+        if (owned) agent = { ...agent, tier: "owner_identified", ...describeOwnerAgent(owned) };
+      }
       await db.insert(manifestHits).values({
         siteId,
         endpoint,

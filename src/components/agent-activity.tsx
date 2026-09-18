@@ -11,7 +11,7 @@ const MISMATCH_LABELS: Record<AgentActivity["mismatches"][number]["reason"], str
  * requested. Mismatches are shown as the difference between the two, never as
  * a characterisation of the agent (see MISMATCH_NOTE).
  */
-export function AgentActivityPanel({ agents, days }: { agents: AgentActivity[]; days: number }) {
+export function AgentActivityPanel({ agents, windowText }: { agents: AgentActivity[]; windowText: string }) {
   return (
     <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5">
       <div>
@@ -20,7 +20,7 @@ export function AgentActivityPanel({ agents, days }: { agents: AgentActivity[]; 
       </div>
 
       {agents.length === 0 ? (
-        <p className="text-sm text-zinc-500">No verified agents requested your pages in the last {days} days.</p>
+        <p className="text-sm text-zinc-500">No verified agents requested your pages in the {windowText}.</p>
       ) : (
         <ul className="space-y-3">
           {agents.map((agent) => (

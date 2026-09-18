@@ -8,7 +8,8 @@
  *
  * What it sends per request: the URL, the method, the visitor's IP, and the
  * user agent plus the Web Bot Auth signature headers, including any
- * Intent-Declaration the agent signed. TrustTab uses the IP in
+ * Intent-Declaration the agent signed, plus x-trusttab-agent, which is how
+ * you can tag an agent you built yourself. TrustTab uses the IP in
  * memory to match published agent ranges and stores only a coarsened form
  * (IPv4 /24, IPv6 /48). No cookies, query strings or page content are sent.
  *
@@ -25,7 +26,7 @@
 
 const TRUSTTAB_URL = "https://trusttab-mu.vercel.app";
 /** Only these headers are forwarded. */
-const FORWARDED = ["user-agent", "signature", "signature-input", "signature-agent", "intent-declaration"];
+const FORWARDED = ["user-agent", "signature", "signature-input", "signature-agent", "intent-declaration", "x-trusttab-agent"];
 
 const worker = {
   async fetch(request, env, ctx) {

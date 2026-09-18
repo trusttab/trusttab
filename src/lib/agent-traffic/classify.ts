@@ -13,12 +13,15 @@ import { verifyWebBotAuth, type VerifyOptions } from "./web-bot-auth";
  * - "likely_automated": a known agent user agent, or an IP inside a range the
  *   operator publishes for its crawlers. Both are estimates: user agents are
  *   self-reported, and shared infrastructure carries non-agent traffic too.
+ * - "owner_identified": matched a signal the site's owner registered for their
+ *   own agent (see owner-agents.ts). Applied by the recorders, which know
+ *   which site a request was for; a verified signature always outranks it.
  *
  * Nothing here ever concludes "this was a human". An unclassified request is
  * just one none of these signals matched.
  */
 
-export type AgentTier = "verified" | "likely_automated" | "trusttab" | "unclassified";
+export type AgentTier = "verified" | "likely_automated" | "owner_identified" | "trusttab" | "unclassified";
 
 export type AgentClassification = {
   tier: AgentTier;

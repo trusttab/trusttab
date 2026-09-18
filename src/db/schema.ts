@@ -287,7 +287,7 @@ export const manifestHits = pgTable(
      * "verified" is a checked signature; "likely_automated" is an estimate.
      * Null on rows written before classification existed.
      */
-    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "trusttab" | "unclassified">(),
+    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "owner_identified" | "trusttab" | "unclassified">(),
     /** The signed identity, or the operator a heuristic matched. */
     agentIdentity: text("agent_identity"),
     /** The evidence for the classification, in plain words. */
@@ -314,7 +314,9 @@ export const siteAgentHits = pgTable(
       .references(() => sites.id, { onDelete: "cascade" }),
     /** Request path only, capped; never the query string. */
     path: text("path"),
-    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "trusttab" | "unclassified">().notNull(),
+    /** Request method, for the session timeline. */
+    method: text("method"),
+    agentTier: text("agent_tier").$type<"verified" | "likely_automated" | "owner_identified" | "trusttab" | "unclassified">().notNull(),
     agentIdentity: text("agent_identity"),
     agentSignal: text("agent_signal"),
     /** Coarsened client IP (IPv4 /24, IPv6 /48); the full address is never stored. */
@@ -327,6 +329,31 @@ export const siteAgentHits = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_agent_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
+);
+
+/**
+ * Agents a site owner registers as their own (e.g. something they built on a
+ * no-code platform), so their traffic is labelled instead of sitting in
+ * unclassified. This is the owner tagging their own known traffic on their own
+ * dashboard: a self-configured label, not a verified claim, and it is never
+ * exposed on any public surface.
+ */
+export const ownerAgents = pgTable(
+  "owner_agents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    /** The owner's own name for it, e.g. "Lead Follow-up Bot". */
+    name: text("name").notNull(),
+    /** Which signal identifies it. */
+    matchType: text("match_type").$type<"user_agent" | "ip" | "header">().notNull(),
+    /** The user-agent substring, IP or CIDR, or x-trusttab-agent value to match. */
+    matchValue: text("match_value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("owner_agents_site_id_idx").on(t.siteId)],
 );
 
 /** Fixed-window request counters for rate limiting: public endpoints and auth (see src/lib/rate-limit.ts). */

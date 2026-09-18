@@ -5,11 +5,12 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { desc, eq, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { manifestEndpoints, manifests, siteAgentHits, sites } from "@/db/schema";
+import { manifestEndpoints, manifests, ownerAgents, siteAgentHits, sites } from "@/db/schema";
 import { anonymizeIp } from "@/lib/ip";
 
 import { classifyRequest } from "./classify";
 import { findScopeMismatch, formatDeclaration, type PublishedEndpoint } from "./intent";
+import { describeOwnerAgent, matchOwnerAgent, OWNER_AGENT_HEADER, type OwnerAgent } from "./owner-agents";
 import type { VerifyOptions } from "./web-bot-auth";
 
 /**
@@ -78,6 +79,14 @@ async function publishedEndpoints(siteId: string): Promise<PublishedEndpoint[]> 
   return rows as PublishedEndpoint[];
 }
 
+/** The agents this site's owner registered as their own. */
+export async function ownerAgentsFor(siteId: string): Promise<OwnerAgent[]> {
+  return db
+    .select({ id: ownerAgents.id, name: ownerAgents.name, matchType: ownerAgents.matchType, matchValue: ownerAgents.matchValue })
+    .from(ownerAgents)
+    .where(eq(ownerAgents.siteId, siteId));
+}
+
 /**
  * Classifies and stores reported events. Returns how many were stored.
  * `options` is the same test seam as classifyRequest's: how to load an
@@ -86,6 +95,7 @@ async function publishedEndpoints(siteId: string): Promise<PublishedEndpoint[]> 
 export async function recordSiteHits(siteId: string, events: CollectorEvent[], options: VerifyOptions = {}): Promise<number> {
   const rows: (typeof siteAgentHits.$inferInsert)[] = [];
   let endpoints: PublishedEndpoint[] | null = null;
+  const registered = await ownerAgentsFor(siteId);
 
   for (const event of events.slice(0, MAX_EVENTS_PER_REQUEST)) {
     let url: URL;
@@ -105,7 +115,17 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[], o
     const request = new Request(url, { method: event.method === "POST" ? "POST" : "GET", headers });
 
     const ip = typeof event.ip === "string" ? event.ip : null;
-    const agent = await classifyRequest(request, ip, options);
+    let agent = await classifyRequest(request, ip, options);
+
+    // The owner's own label fills in where TrustTab could only guess; a
+    // verified signature (or TrustTab's own fetch) always outranks it.
+    if (agent.tier !== "verified" && agent.tier !== "trusttab") {
+      const owned = matchOwnerAgent(
+        { userAgent: headers.get("user-agent"), ip, headerValue: headers.get(OWNER_AGENT_HEADER) },
+        registered,
+      );
+      if (owned) agent = { ...agent, tier: "owner_identified", ...describeOwnerAgent(owned) };
+    }
 
     // Only a verified agent can have a declaration: it is part of its signature.
     const declaration = agent.declaration ?? null;
@@ -115,6 +135,7 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[], o
     rows.push({
       siteId,
       path: url.pathname.slice(0, 200),
+      method: request.method,
       agentTier: agent.tier,
       agentIdentity: agent.identity,
       agentSignal: agent.signal,

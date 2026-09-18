@@ -931,6 +931,59 @@ rather than silently changing direction.
     So the tamper-evidence and the covered-components rule both hold over the
     wire, against a real directory fetch, not only in tests.
 
+- **2026-09-18 — Agent session timeline and owner-registered agents
+  (AGENT_TRAFFIC_DETECTION_SPEC additions).** Both are dashboard-only and
+  behind the existing per-site ownership check: nothing here appears on the
+  public verify page, the badge or the manifest, because a ranking of who
+  crawls a site is the owner's operational data, not a public trust claim.
+  `access.test.ts` pins that the public surfaces don't import the new queries.
+  - **Timeline.** A ranked list of agents by request volume over 24h / 48h /
+    7d / 30d (`AGENT_TRAFFIC_WINDOWS`), and per-agent, the requests in order
+    with endpoint, method, timestamp and whether the path fell inside the
+    agent's declared scope (reusing the declared-intent mismatch styling, and
+    its wording rules). Ranking covers the identified tiers only — verified,
+    likely automated and owner-identified — since unclassified traffic has no
+    agent to rank and TrustTab's own checks aren't visitors. `method` is now
+    stored on `site_agent_hits`; rows collected before this are blank there.
+  - **Two plain readouts, then one heuristic.** The detail view states the
+    facts first ("90 requests in 53 seconds, 90 distinct pages"). The only
+    judgment is "Unusually high request rate (heuristic)", and it fires only
+    past a documented threshold: **60 requests in any rolling 60-second
+    window**, measured as a peak rather than an average so a short burst
+    isn't averaged away over a long window. The number is defensible rather
+    than arbitrary — it is above sustained human browsing, and an order of
+    magnitude above the one-request-per-second-and-slower rates that
+    `Crawl-delay` conventions ask crawlers for. The UI says ordinary traffic
+    can reach it too (many assets on one page, prefetching), so the flag
+    points at the timeline rather than concluding anything.
+  - **The word "scraper" is not used, and a test forbids it** along with
+    "attack" and "malicious", the same way Addition 5 forbids "scam" and
+    declared intent forbids "compromised". Rate and breadth are facts; intent
+    isn't visible from them.
+  - **Owner-registered agents are a fourth tier** (`owner_identified`), for
+    the case neither existing tier can reach: an agent the owner built on a
+    no-code platform publishes no signing keys and runs from no published
+    crawler range. The owner registers a signal — a user-agent substring, an
+    IP or CIDR, or the `x-trusttab-agent` header — and matching traffic is
+    labelled "Your agent: <their name>" instead of sitting in unclassified.
+  - **Not adversarial, and the UI says so** (owner framing, 2026-09-18): the
+    owner is tagging their own known traffic, so this doesn't need the
+    evidentiary bar external declarations do. What it does need is honesty
+    that it's a self-configured label: the tier reads "Your own agents (you
+    labelled these)" and the panel says it's "a label you set, not something
+    TrustTab verified", only as good as the signal it matches, since a user
+    agent can be copied by anyone and an IP can be shared by an office.
+  - **A label can never outrank a signature.** Both recorders apply
+    `owner_identified` only when the tier isn't already `verified` or
+    `trusttab`, so registering `Mozilla/5.0` can't relabel a cryptographically
+    verified agent — or every visitor — as the owner's own bot. An integration
+    test pins it. User-agent fragments under 4 characters are rejected for the
+    same reason, and sites are capped at 20 registered agents.
+  - **`x-trusttab-agent` is a fixed header name**, not per-site configuration,
+    so the collectors stay a fixed forwarded list (now six headers) rather
+    than something each site has to configure. Registration routes require
+    both same-origin browser requests and site ownership.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1001,6 +1054,20 @@ publish.
 - Generic datacenter/cloud IP matching (AWS, GCP, Azure) is deliberately not
   implemented; see the decision entry. If it is added later it needs a
   separate, weaker label than the operator-published ranges.
+- The high-request-rate flag's threshold (60 requests in any 60-second
+  window, `HIGH_RATE_PER_MINUTE` in `src/lib/agent-traffic/timeline.ts`) is a
+  documented judgment call, not a measured one. It has not been calibrated
+  against real traffic on a busy site, where prefetching or an asset-heavy
+  page could reach it legitimately. Revisit once there is production traffic
+  to measure; it is deliberately one constant in one place.
+- Owner-registered agent signals are self-declared labels, and TrustTab has
+  no way to check them. A shared office IP or a common user-agent fragment
+  would label other people's traffic as the owner's own agent. The minimum
+  fragment length and the verified/trusttab precedence bound the damage, but
+  the label is only ever as good as the owner's own signal.
+- The agent timeline shows at most 500 requests per agent per window. A
+  busier window is truncated (the UI says so), and the volume counts above it
+  stay complete. Paging is not built.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

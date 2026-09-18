@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { INTENT_HEADER } from "./intent";
+import { OWNER_AGENT_HEADER } from "./owner-agents";
 
 /**
  * The collectors run on customers' own infrastructure, so what they forward
@@ -19,7 +20,7 @@ const COLLECTORS = ["collectors/cloudflare-worker.js", "collectors/nextjs-proxy.
 describe("collectors forward what classification needs", () => {
   for (const { file, source } of COLLECTORS) {
     test(`${file} forwards the signature and declaration headers`, () => {
-      for (const header of ["user-agent", "signature", "signature-input", "signature-agent", INTENT_HEADER]) {
+      for (const header of ["user-agent", "signature", "signature-input", "signature-agent", INTENT_HEADER, OWNER_AGENT_HEADER]) {
         assert.match(source, new RegExp(`"${header}"`), `${file} must forward ${header}`);
       }
     });

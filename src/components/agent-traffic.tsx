@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { REGISTRY_SCOPE_NOTE, SITE_SCOPE_NOTE, TIER_LABELS, TIER_NOTES } from "@/lib/agent-traffic/display";
-import { AGENT_TRAFFIC_RANGES, type AgentGroup, type AgentTrafficSummary } from "@/lib/agent-traffic/queries";
+import { AGENT_TRAFFIC_WINDOWS, windowLabel, type AgentGroup, type AgentTrafficSummary } from "@/lib/agent-traffic/queries";
 
 import { AgentTrafficCollection } from "./agent-traffic-collection";
 
@@ -47,7 +47,7 @@ function Breakdown({ summary }: { summary: AgentTrafficSummary }) {
   if (summary.total === 0) {
     return (
       <p className="text-sm text-zinc-500">
-        {scope} Nothing in the last {summary.days} days.
+        {scope} Nothing in the {windowLabel(summary.days)}.
       </p>
     );
   }
@@ -55,8 +55,8 @@ function Breakdown({ summary }: { summary: AgentTrafficSummary }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-600">{scope}</p>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(["verified", "likely_automated", "unclassified", "trusttab"] as const).map((tier) => (
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {(["verified", "likely_automated", "owner_identified", "unclassified", "trusttab"] as const).map((tier) => (
           <div key={tier} className="rounded-md border border-zinc-200 p-3">
             <dt className="text-xs text-zinc-500">{TIER_LABELS[tier]}</dt>
             <dd className="mt-0.5 text-lg font-semibold tabular-nums">{totals[tier]}</dd>
@@ -111,16 +111,16 @@ export function AgentTraffic({
           <p className="mt-1 text-sm text-zinc-600">Who has been requesting this site, and how that was established.</p>
         </div>
         <div className="flex gap-1 text-xs">
-          {AGENT_TRAFFIC_RANGES.map((days) => (
+          {AGENT_TRAFFIC_WINDOWS.map((range) => (
             <Link
-              key={days}
-              href={`/dashboard/${siteId}?agentDays=${days}`}
+              key={range}
+              href={`/dashboard/${siteId}?window=${range}`}
               scroll={false}
               className={`rounded-md border px-2 py-1 ${
-                summary.days === days ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                summary.days === range ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"
               }`}
             >
-              {days} days
+              {range}
             </Link>
           ))}
         </div>
