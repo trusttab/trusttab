@@ -820,6 +820,44 @@ rather than silently changing direction.
     because nothing here can establish one; unmatched requests are
     "Unclassified" with a note saying exactly that.
 
+- **2026-09-17 — AI Check, Addition 5: known-product brand mismatch.** From
+  real adversarial testing by the owner: `hermesagents.net` presents itself as
+  "Hermes Agent", the name of Nous Research's unaffiliated open-source agent
+  at `hermes-agent.nousresearch.com`. 2a correctly said "no known widgets
+  found" (that product was never on the widget list), so this is a different
+  check, not a bug fix.
+  - **What it checks:** the page's own claimed identity (title's leading
+    segment, `og:site_name`, `h1`, JSON-LD `name`) against
+    `extension/src/known-products.ts`, firing only when the name matches a
+    listed product and the domain isn't one of that product's.
+  - **Distinct from Addition 4:** that one catches misspellings of a known
+    *domain* (`paypa1.com`); this one catches a claim to a known *product
+    name* from an unrelated domain.
+  - **Guards against false positives:** the product's own domains and
+    subdomains are silent; platform domains where anyone can publish (GitHub,
+    Reddit, Medium, Hugging Face, vercel.app…) are silent; a page that merely
+    mentions a product ("How to install Hermes Agent") doesn't match, because
+    only the leading title segment counts; one-word product names need two
+    independent signals; and products named after ordinary words (Cursor,
+    Devin, Manus, Lovable, Windsurf, Comet, Gemini) are deliberately left off
+    the list, since another business may legitimately use those names. A test
+    asserts every listed product's own domains stay silent.
+  - **Wording:** states the discrepancy and nothing else. A test forbids
+    "scam", "fake", "fraud" and "impersonation" in the output, and the popup
+    says a shared name can be an unrelated product, a reseller or someone
+    trading on the name, and that this check can't tell which.
+  - **Severity:** one concrete check, so it is yellow alone and contributes to
+    red only alongside another independent check, per the badge rule.
+  - **Committed regression fixture:** `extension/src/fixtures/hermes-agent.json`
+    holds both pages' identity fields as captured live on 2026-09-17 (metadata
+    and headings only, not page content). Tests pin both directions: the
+    unrelated domain is reported, and the real product's own site and its
+    vendor's domain never are.
+  - **Completeness caveat, in the UI as well as here:** the list is short and
+    the space of AI products is large, so silence is not evidence a product is
+    genuine. Like the widget signatures, brand list and C2PA trust lists, it
+    goes stale and needs periodic review.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -859,6 +897,11 @@ publish.
 - Manifests published before the self-attestation fields existed are served
   as-is until their next re-check, and they don't validate against the
   current schema. Only leasetab.com's is affected.
+- The known-AI-product list (`extension/src/known-products.ts`) is small and
+  goes stale as products launch, rename or change domains. It can only catch
+  impersonation of products on it, and a missing domain for a listed product
+  would make that product's own page look like an impersonation, so additions
+  need every legitimate domain. Needs periodic review.
 - The spoofed-brand list for the domain-lookalike check
   (`extension/src/lookalike-brands.ts`) goes stale: brands change domains and
   new ones get targeted. It needs periodic review, like the widget signatures

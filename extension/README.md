@@ -27,6 +27,16 @@ verified by TrustTab.
     threat of loss). Either alone is normal and never reported. Blocks that
     warn about such requests ("we will never ask for your password") are
     excluded. The finding quotes the page's own words.
+  - **Known-product brand mismatch**: the page calls itself a known AI
+    product (in its title, site-name metadata, main heading or structured
+    data) while sitting on a domain that isn't that product's. Found in real
+    testing: a site presenting itself as "Hermes Agent" on `hermesagents.net`,
+    while the unaffiliated open-source Hermes Agent is Nous Research's, at
+    `hermes-agent.nousresearch.com`. It reports the discrepancy only, never
+    intent, and it stays silent on the product's own domains, on platforms
+    where anyone can publish (GitHub, Reddit, Medium…), and for pages that
+    merely mention a product. The list is short, so finding nothing is not
+    evidence a product is genuine, and the popup says so.
   - **Domain lookalike**: the page's domain resembles a frequently spoofed
     brand's domain without being it, by homoglyph or typo substitution
     (`paypa1.com`, `arnazon.com`, internationalized domains are decoded
@@ -175,7 +185,12 @@ the two can't drift apart.
 
 Append an entry to `src/widget-signatures.ts`. That list is the only place
 providers are defined. Spoofed brands for the domain-lookalike check live in
-`src/lookalike-brands.ts` the same way, and both go stale over time. For an AI application, use `kind: "ai_application"`
+`src/lookalike-brands.ts` the same way, as do known AI products in
+`src/known-products.ts`, and all three go stale over time. When adding a
+product, list **every** domain it legitimately uses, or its own site will
+look like an impersonation, and leave out names that are ordinary words
+(Cursor, Devin, Manus, Lovable, Windsurf), because another business may
+legitimately use them. For an AI application, use `kind: "ai_application"`
 with `pageDomains` (the domains the app itself runs on); it matches the
 page's own address, so visiting another site that merely loads something
 from it never counts. For widgets, use hosts only if loading anything from
@@ -202,6 +217,9 @@ extension/
   src/lookalike.ts     domain similarity checks (punycode, homoglyphs, edit distance)
   src/lookalike-brands.ts   the list of frequently spoofed brands
   src/safety-badge.ts  green/yellow/red summary, a count of which checks fired
+  src/product-mismatch.ts   known-product name vs. domain check
+  src/known-products.ts     the list of known AI products and their real domains
+  src/fixtures/             real captured pages used as regression fixtures
   trust/               committed C2PA trust lists (update: node extension/update-trust-lists.mjs)
   build.mjs          esbuild bundle → dist/
   make-icons.mjs     generates icons/ (no image dependencies)

@@ -17,6 +17,7 @@ import {
 } from "./image-check";
 import { checkLookalike, describeLookalike } from "./lookalike";
 import { describeProvenance, findUnsignedAiMetadata, type CredentialsResult } from "./provenance";
+import { collectPageIdentity, describeProductMismatch, findProductMismatch } from "./product-mismatch";
 import { summarizeSafety, type SafetyFinding } from "./safety-badge";
 import { collectRequestBlocks, findSensitiveRequest } from "./sensitive-request";
 import { requestTextEstimate } from "./text-estimate";
@@ -208,6 +209,26 @@ async function runSafetyChecks(pageHost: string, tabId?: number): Promise<Safety
         `Legitimate support rarely asks for this unprompted. Check you're really dealing with ${pageHost || "this site"} before sharing anything.`,
       ],
     });
+  }
+
+  // Addition 5: does the page call itself a known AI product from a domain
+  // that isn't that product's? Reads the page's own metadata; sends nothing.
+  if (pageHost) {
+    let identity = null;
+    if (tabId !== undefined) {
+      try {
+        const [injection] = await chrome.scripting.executeScript({ target: { tabId }, func: collectPageIdentity });
+        identity = injection?.result ?? null;
+      } catch {
+        identity = null;
+      }
+    } else {
+      // Development preview: `?claimName=` stands in for what the page calls itself.
+      const claim = new URLSearchParams(location.search).get("claimName");
+      identity = claim ? { title: claim, ogSiteName: claim, headings: [claim], structuredDataNames: [] } : null;
+    }
+    const mismatch = identity ? findProductMismatch(identity, pageHost) : null;
+    if (mismatch) findings.push({ check: "product-mismatch", ...describeProductMismatch(mismatch) });
   }
 
   const lookalike = pageHost ? checkLookalike(pageHost) : null;

@@ -1,0 +1,21 @@
+{
+  "note": "Real pages captured on 2026-09-17, the adversarial case this check was built from. Identity fields only (title, og:site_name, h1, JSON-LD name) — enough to reproduce the check, without copying either site's content.",
+  "impersonating": {
+    "host": "hermesagents.net",
+    "identity": {
+      "title": "Hermes Agent: The AI That Grows With You",
+      "ogSiteName": "Hermes Agent",
+      "headings": ["Hermes Agent"],
+      "structuredDataNames": ["Hermes Agent", "Hermes Agent"]
+    }
+  },
+  "genuine": {
+    "host": "hermes-agent.nousresearch.com",
+    "identity": {
+      "title": "Hermes Agent — Open-Source AI Agent That Grows With You | Nous Research",
+      "ogSiteName": "Hermes Agent",
+      "headings": ["THE AGENT THAT GROWS WITH YOU"],
+      "structuredDataNames": []
+    }
+  }
+}

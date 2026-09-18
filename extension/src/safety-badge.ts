@@ -18,7 +18,7 @@
 
 export type SafetyFinding = {
   /** The check that produced it. Two findings from the same check count once. */
-  check: "sensitive-request" | "domain-lookalike";
+  check: "sensitive-request" | "domain-lookalike" | "product-mismatch";
   title: string;
   details: string[];
 };
