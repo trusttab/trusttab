@@ -712,7 +712,9 @@ rather than silently changing direction.
     chat widgets that render in cross-origin iframes (Intercom, Drift) can't
     be read, so this sees only same-document chat and forms.
   - **Addition 3, fake countdown timer: NOT BUILT** (spec asked for a
-    feasibility call first). Two blocking reasons. (a) The test as specified
+    feasibility call first; the owner confirmed the cut as final on
+    2026-09-17, on the grounds that the check couldn't reliably tell a real
+    deadline from a fake one). Two blocking reasons. (a) The test as specified
     has the wrong sign for the common case: "evergreen" timers store a
     per-visitor deadline in localStorage or a cookie, so they *survive*
     reloads and would be reported as genuine, while a real server-rendered
@@ -853,6 +855,9 @@ rather than silently changing direction.
     and headings only, not page content). Tests pin both directions: the
     unrelated domain is reported, and the real product's own site and its
     vendor's domain never are.
+  - **Verified in the installed extension** by the owner on 2026-09-17:
+    hermesagents.net flags yellow with the intended wording, and
+    hermes-agent.nousresearch.com stays silent.
   - **Completeness caveat, in the UI as well as here:** the list is short and
     the space of AI products is large, so silence is not evidence a product is
     genuine. Like the widget signatures, brand list and C2PA trust lists, it
