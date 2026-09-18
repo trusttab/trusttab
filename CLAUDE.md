@@ -913,10 +913,23 @@ rather than silently changing direction.
     different shape with real availability risk for the customer's site. The
     spec calls enforcement opt-in and off by default; this is flagged for a
     check-in rather than built.
-  - **Not yet live-tested end to end in production:** proving it there needs a
-    publicly reachable agent key directory to sign against, which TrustTab
-    doesn't have (it isn't an agent). The path is proven against the real
-    library, and through the real ingest path with injected keys.
+  - **Live-tested end to end in production (2026-09-18).** TrustTab isn't an
+    agent and has no key directory, so a throwaway test agent identity was
+    published at `/.well-known/http-message-signatures-directory`, three real
+    signed requests were sent to the live deployment, and the directory was
+    removed in the next commit. Its private key never left the machine that
+    generated it and was never committed. Results, straight from the
+    production database:
+    - signed with the declaration covered → `verified`, identity
+      `https://trusttab-mu.vercel.app`, `declared_intent = "booking under
+      /schedule-tour"`;
+    - the same signature with the declaration altered in flight →
+      `unclassified`, "a signature was present but could not be verified";
+    - a valid signature that never covered a declaration, with one appended
+      afterwards → identity still `verified`, `declared_intent = null`.
+
+    So the tamper-evidence and the covered-components rule both hold over the
+    wire, against a real directory fetch, not only in tests.
 
 ## Status at the end of the 5-day build (2026-09-14)
 
