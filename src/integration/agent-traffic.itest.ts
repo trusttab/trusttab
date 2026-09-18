@@ -6,14 +6,16 @@
  *   npm run test:integration   (reads DATABASE_URL etc. from .env.local)
  */
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, webcrypto as crypto } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 
 import { eq } from "drizzle-orm";
 
 import { POST } from "@/app/api/agent-traffic/ingest/route";
+import { jwkToKeyID, sign } from "web-bot-auth";
+
 import { db } from "@/db";
-import { siteAgentHits, sites, users } from "@/db/schema";
+import { manifestEndpoints, manifests, siteAgentHits, sites, users } from "@/db/schema";
 import { issueCollectorToken, recordSiteHits, siteForCollectorToken } from "@/lib/agent-traffic/collector";
 
 const userId = `itest-traffic-${randomUUID()}`;
@@ -111,5 +113,102 @@ describe("POST /api/agent-traffic/ingest", () => {
     assert.equal((await ingest({ token })).status, 400);
     const big = new Request("http://localhost/api/agent-traffic/ingest", { method: "POST", body: "x".repeat(70_000) });
     assert.equal((await POST(big)).status, 413);
+  });
+});
+
+/**
+ * Declared intent, end to end: a signed declaration reaches the database with
+ * the request that carried it, and a request outside that declaration is
+ * recorded as a mismatch. The tamper-evidence this relies on is proven in
+ * src/lib/agent-traffic/intent.test.ts.
+ */
+describe("declared intent through ingest", () => {
+  const SITE_URL = "https://example.org";
+
+  async function signedEvent(path: string, declaration: string | null) {
+    const { privateKey, publicKey } = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+    const jwk = (await crypto.subtle.exportKey("jwk", publicKey)) as JsonWebKey & { kid?: string };
+    const keyid = await jwkToKeyID(
+      { ...jwk, kid: undefined } as JsonWebKey,
+      (data: BufferSource) => crypto.subtle.digest("SHA-256", data),
+      (bytes: ArrayBuffer) => Buffer.from(bytes).toString("base64url"),
+    );
+    const headers: Record<string, string> = {
+      "user-agent": "ExampleAgent/1.0",
+      "signature-agent": '"https://agent.example.com"',
+      ...(declaration ? { "intent-declaration": declaration } : {}),
+    };
+    const request = new Request(`${SITE_URL}${path}`, { headers });
+    const fields = await sign(request, {
+      signer: {
+        algorithm: "ed25519",
+        keyid,
+        sign: async (data: Uint8Array) => new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, privateKey, new Uint8Array(data).slice())),
+      },
+      expires: new Date(Date.now() + 300_000),
+      signatureAgentKey: "signature-agent",
+      ...(declaration ? { additionalComponents: ["intent-declaration"] } : {}),
+    });
+    return {
+      event: {
+        url: `${SITE_URL}${path}`,
+        method: "GET",
+        ip: "203.0.113.20",
+        headers: { ...headers, signature: fields.signature, "signature-input": fields.signatureInput },
+      },
+      keys: [{ ...jwk, kid: keyid }],
+    };
+  }
+
+  before(async () => {
+    const [manifest] = await db
+      .insert(manifests)
+      .values({
+        siteId,
+        version: 1,
+        payloadJson: {} as never,
+        signature: "sig..sig",
+        expiresAt: new Date(Date.now() + 86_400_000),
+      })
+      .returning();
+    await db.insert(manifestEndpoints).values({
+      manifestId: manifest.id,
+      path: "/schedule-tour",
+      method: "POST",
+      purpose: "booking",
+      schemaJson: { name: "string" },
+      agentSafe: true,
+      requiresCaptcha: false,
+    });
+  });
+
+  test("a signed declaration is stored with the request that carried it", async () => {
+    const { event, keys } = await signedEvent("/schedule-tour", 'purpose="booking"; scope="/schedule-tour"');
+    assert.equal(await recordSiteHits(siteId, [event], { loadKeys: async () => keys }), 1);
+
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/schedule-tour"));
+    assert.equal(row.agentTier, "verified");
+    assert.equal(row.agentIdentity, "https://agent.example.com");
+    assert.equal(row.declaredIntent, "booking under /schedule-tour");
+    assert.equal(row.scopeMismatch, null, "a request inside the declared scope is not a mismatch");
+  });
+
+  test("a request outside the declared scope is recorded as a mismatch", async () => {
+    const { event, keys } = await signedEvent("/account", 'purpose="booking"; scope="/schedule-tour"');
+    await recordSiteHits(siteId, [event], { loadKeys: async () => keys });
+
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/account"));
+    assert.equal(row.scopeMismatch, "path-outside-scope");
+    assert.equal(row.declaredIntent, "booking under /schedule-tour");
+  });
+
+  test("a verified agent with no declaration stores none, and is not a mismatch", async () => {
+    const { event, keys } = await signedEvent("/pricing-page", null);
+    await recordSiteHits(siteId, [event], { loadKeys: async () => keys });
+
+    const [row] = await db.select().from(siteAgentHits).where(eq(siteAgentHits.path, "/pricing-page"));
+    assert.equal(row.agentTier, "verified");
+    assert.equal(row.declaredIntent, null);
+    assert.equal(row.scopeMismatch, null);
   });
 });

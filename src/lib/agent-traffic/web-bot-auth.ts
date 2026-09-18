@@ -10,6 +10,8 @@ import {
 
 import { safeFetchText } from "@/lib/safe-fetch";
 
+import { INTENT_HEADER, parseIntentDeclaration, type IntentDeclaration } from "./intent";
+
 /**
  * Tier 1: cryptographic verification of an inbound request (Web Bot Auth,
  * RFC 9421 HTTP Message Signatures).
@@ -28,7 +30,18 @@ import { safeFetchText } from "@/lib/safe-fetch";
  */
 
 export type WebBotAuthResult =
-  | { ok: true; identity: string; keyid: string; expires: Date }
+  | {
+      ok: true;
+      identity: string;
+      keyid: string;
+      expires: Date;
+      /**
+       * The agent's declared intent, but only when the signature actually
+       * covered the header. A declaration that wasn't signed is dropped: any
+       * intermediary can append a header to someone else's signed request.
+       */
+      declaration: IntentDeclaration | null;
+    }
   | { ok: false; reason: "not-signed" | "no-agent" | "unverified" | "directory-unavailable" | "budget" };
 
 const DIRECTORY_TTL_MS = 6 * 60 * 60 * 1000;
@@ -139,7 +152,20 @@ export async function verifyWebBotAuth(request: Request, options: VerifyOptions 
 
   try {
     const verified = await verify(request, { resolver: (candidate) => verifierFor(candidate, keys) });
-    return { ok: true, identity: origin, keyid: verified.keyid, expires: verified.expires };
+    // Only a covered component is tamper-evident: altering or removing a
+    // covered header breaks the signature, while an appended one leaves a
+    // valid signature that simply never covered it.
+    const covered = verified.components.some((component) => {
+      const name = typeof component === "string" ? component : component.name;
+      return typeof name === "string" && name.toLowerCase() === INTENT_HEADER;
+    });
+    return {
+      ok: true,
+      identity: origin,
+      keyid: verified.keyid,
+      expires: verified.expires,
+      declaration: covered ? parseIntentDeclaration(request.headers.get(INTENT_HEADER)) : null,
+    };
   } catch {
     return { ok: false, reason: "unverified" };
   }

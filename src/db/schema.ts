@@ -292,6 +292,8 @@ export const manifestHits = pgTable(
     agentIdentity: text("agent_identity"),
     /** The evidence for the classification, in plain words. */
     agentSignal: text("agent_signal"),
+    /** The agent's signed intent declaration, when it signed one (see agent-traffic/intent.ts). */
+    declaredIntent: text("declared_intent"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("manifest_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
@@ -318,6 +320,10 @@ export const siteAgentHits = pgTable(
     /** Coarsened client IP (IPv4 /24, IPv6 /48); the full address is never stored. */
     requesterIp: text("requester_ip"),
     userAgent: text("user_agent"),
+    /** The agent's signed intent declaration, when it signed one. */
+    declaredIntent: text("declared_intent"),
+    /** Why the observed request fell outside that declaration, when it did. */
+    scopeMismatch: text("scope_mismatch").$type<"path-outside-scope" | "purpose-not-declared">(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_agent_hits_site_created_at_idx").on(t.siteId, t.createdAt)],

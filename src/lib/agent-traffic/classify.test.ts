@@ -13,7 +13,7 @@ const BROWSER_UA =
 const TARGET = "https://trusttab-mu.vercel.app/api/manifest/leasetab.com";
 
 /** Builds a request signed the way a Web Bot Auth agent signs one, plus the keys it would publish. */
-async function signedRequest(agentOrigin: string, target = TARGET) {
+async function signedRequest(agentOrigin: string, target = TARGET, options: { declaration?: string; coverDeclaration?: boolean } = {}) {
   const { privateKey, publicKey } = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
   const publicJwk = (await crypto.subtle.exportKey("jwk", publicKey)) as DirectoryKey;
   const keyid = await jwkToKeyID(
@@ -23,9 +23,14 @@ async function signedRequest(agentOrigin: string, target = TARGET) {
   );
 
   const request = new Request(target, {
-    headers: { "user-agent": "ExampleAgent/1.0", "signature-agent": `"${agentOrigin}"` },
+    headers: {
+      "user-agent": "ExampleAgent/1.0",
+      "signature-agent": `"${agentOrigin}"`,
+      ...(options.declaration ? { "intent-declaration": options.declaration } : {}),
+    },
   });
   const fields = await sign(request, {
+    ...(options.declaration && options.coverDeclaration !== false ? { additionalComponents: ["intent-declaration"] } : {}),
     signer: {
       algorithm: "ed25519",
       keyid,
@@ -111,5 +116,36 @@ describe("classifyRequest, Tier 1 (verified)", () => {
     const withBotUa = new Request(signed, { headers: { ...Object.fromEntries(signed.headers), "user-agent": "GPTBot/1.2" } });
     const result = await classifyRequest(withBotUa, "203.0.113.9", { loadKeys: async () => keys });
     assert.equal(result.tier, "verified");
+  });
+
+  /**
+   * A declaration is only believed when the signature covered it: anyone can
+   * append a header to a request someone else signed. See intent.test.ts for
+   * the tamper-evidence proof this relies on.
+   */
+  test("a signed declaration is recorded with the verified identity", async () => {
+    const { signed, keys } = await signedRequest("https://agent.example.com", TARGET, {
+      declaration: 'purpose="booking"; scope="/schedule-tour"',
+    });
+    const result = await classifyRequest(signed, "203.0.113.9", { loadKeys: async () => keys });
+    assert.equal(result.tier, "verified");
+    assert.deepEqual(result.declaration, { purposes: ["booking"], scopes: ["/schedule-tour"] });
+  });
+
+  test("a declaration the signature didn't cover is ignored, while the identity still verifies", async () => {
+    const { signed, keys } = await signedRequest("https://agent.example.com", TARGET, {
+      declaration: 'purpose="booking"',
+      coverDeclaration: false,
+    });
+    const result = await classifyRequest(signed, "203.0.113.9", { loadKeys: async () => keys });
+    assert.equal(result.tier, "verified", "the identity is still verified");
+    assert.equal(result.declaration, null, "an unsigned declaration must not be treated as declared");
+  });
+
+  test("a verified agent that declares nothing is ordinary, not worse", async () => {
+    const { signed, keys } = await signedRequest("https://agent.example.com");
+    const result = await classifyRequest(signed, "203.0.113.9", { loadKeys: async () => keys });
+    assert.equal(result.tier, "verified");
+    assert.equal(result.declaration, null);
   });
 });

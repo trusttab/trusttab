@@ -2,13 +2,15 @@ import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { eq, lt, sql } from "drizzle-orm";
+import { desc, eq, lt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { siteAgentHits, sites } from "@/db/schema";
+import { manifestEndpoints, manifests, siteAgentHits, sites } from "@/db/schema";
 import { anonymizeIp } from "@/lib/ip";
 
 import { classifyRequest } from "./classify";
+import { findScopeMismatch, formatDeclaration, type PublishedEndpoint } from "./intent";
+import type { VerifyOptions } from "./web-bot-auth";
 
 /**
  * Site-wide agent traffic: the opt-in half of this feature, where a collector
@@ -62,9 +64,28 @@ export async function siteForCollectorToken(token: unknown) {
   return site;
 }
 
-/** Classifies and stores reported events. Returns how many were stored. */
-export async function recordSiteHits(siteId: string, events: CollectorEvent[]): Promise<number> {
+/**
+ * The endpoints the site's live manifest publishes, so a declared purpose can
+ * be compared with what the site itself says a path is for.
+ */
+async function publishedEndpoints(siteId: string): Promise<PublishedEndpoint[]> {
+  const [latest] = await db.select({ id: manifests.id }).from(manifests).where(eq(manifests.siteId, siteId)).orderBy(desc(manifests.version)).limit(1);
+  if (!latest) return [];
+  const rows = await db
+    .select({ path: manifestEndpoints.path, purpose: manifestEndpoints.purpose })
+    .from(manifestEndpoints)
+    .where(eq(manifestEndpoints.manifestId, latest.id));
+  return rows as PublishedEndpoint[];
+}
+
+/**
+ * Classifies and stores reported events. Returns how many were stored.
+ * `options` is the same test seam as classifyRequest's: how to load an
+ * agent's published keys, so tests don't reach the network.
+ */
+export async function recordSiteHits(siteId: string, events: CollectorEvent[], options: VerifyOptions = {}): Promise<number> {
   const rows: (typeof siteAgentHits.$inferInsert)[] = [];
+  let endpoints: PublishedEndpoint[] | null = null;
 
   for (const event of events.slice(0, MAX_EVENTS_PER_REQUEST)) {
     let url: URL;
@@ -84,7 +105,13 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[]): 
     const request = new Request(url, { method: event.method === "POST" ? "POST" : "GET", headers });
 
     const ip = typeof event.ip === "string" ? event.ip : null;
-    const agent = await classifyRequest(request, ip);
+    const agent = await classifyRequest(request, ip, options);
+
+    // Only a verified agent can have a declaration: it is part of its signature.
+    const declaration = agent.declaration ?? null;
+    if (declaration && endpoints === null) endpoints = await publishedEndpoints(siteId);
+    const mismatch = findScopeMismatch(declaration, url.pathname, endpoints ?? []);
+
     rows.push({
       siteId,
       path: url.pathname.slice(0, 200),
@@ -93,6 +120,8 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[]): 
       agentSignal: agent.signal,
       requesterIp: ip ? anonymizeIp(ip) : null,
       userAgent: headers.get("user-agent")?.slice(0, 500) ?? null,
+      declaredIntent: declaration ? formatDeclaration(declaration).slice(0, 400) : null,
+      scopeMismatch: mismatch?.reason ?? null,
     });
   }
 

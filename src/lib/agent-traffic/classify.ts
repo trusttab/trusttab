@@ -1,6 +1,7 @@
 import "server-only";
 
 import { matchAgentSignature } from "./agents";
+import type { IntentDeclaration } from "./intent";
 import { matchAgentRange } from "./ip-match";
 import { verifyWebBotAuth, type VerifyOptions } from "./web-bot-auth";
 
@@ -21,6 +22,8 @@ export type AgentTier = "verified" | "likely_automated" | "trusttab" | "unclassi
 
 export type AgentClassification = {
   tier: AgentTier;
+  /** Present only for verified agents that signed a declaration (see intent.ts). */
+  declaration?: IntentDeclaration | null;
   /** Who it is, when known: a signed identity, or the operator's name for a heuristic match. */
   identity: string | null;
   /** The evidence, in plain words, for the dashboard to show. */
@@ -44,6 +47,7 @@ export async function classifyRequest(request: Request, ip: string | null, optio
       tier: "verified",
       identity: verified.identity,
       signal: `signed request, verified against ${new URL(verified.identity).host}'s published keys`,
+      declaration: verified.declaration,
     };
   }
 

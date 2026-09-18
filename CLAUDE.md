@@ -863,6 +863,56 @@ rather than silently changing direction.
     genuine. Like the widget signatures, brand list and C2PA trust lists, it
     goes stale and needs periodic review.
 
+- **2026-09-18 — Declared intent (AGENT_TRAFFIC_DETECTION_SPEC addition).**
+  Binds an agent's stated scope to the Web Bot Auth identity already shipped.
+  - **Feasibility check first, and it passed cleanly.** `web-bot-auth`'s
+    `sign()` takes `additionalComponents`, and `verify()` returns the
+    `components` it actually covered. Proven against the library, not assumed
+    (`intent.test.ts` pins all four): a covered declaration verifies and is
+    listed among the signed components; altering it after signing fails
+    verification; removing it fails with "Missing field"; and a declaration
+    **appended** to someone else's valid signature leaves the signature valid
+    while the covered-component list shows it was never signed.
+  - **The rule that follows:** a declaration counts only when the signature
+    covered it. `verifyWebBotAuth` checks the covered-component list and drops
+    anything else, because otherwise an unsigned header sitting beside a
+    signed identity would look verified when it isn't.
+  - **Vocabulary is the manifest's own `purpose` taxonomy**
+    (agent-trust.schema.json via `PURPOSES`), not a second one. Header shape:
+    `Intent-Declaration: purpose="booking"; scope="/schedule-tour"`, repeated
+    keys allowed, unknown purposes dropped rather than invalidating the whole
+    declaration.
+  - **Declaring is optional.** A verified agent that declares nothing is
+    ordinary and is never ranked below one that declares; the UI says so.
+  - **Mismatch is defined narrowly:** the path falls outside a declared scope,
+    or the site itself publishes that path under a purpose the agent didn't
+    declare. A path the site publishes nothing about is not a mismatch, since
+    most of a site isn't in its manifest. Stored on `site_agent_hits`
+    (`declared_intent`, `scope_mismatch`); registry hits store the declaration
+    only, as TrustTab's own endpoints aren't in a site's taxonomy.
+  - **Wording:** a test forbids "malicious", "attack", "compromised", "abuse",
+    "unauthorised" and similar, the same way Addition 5 forbids "scam". The UI
+    says a mismatch can be a misconfigured agent, a redirect or a deliberate
+    deviation, and that this can't tell which.
+  - **Collectors had to change**, and this was easy to miss: they forwarded
+    only the user agent and three signature headers, so a signed declaration
+    would never have reached TrustTab from a real site. Both now forward
+    `intent-declaration`, and `collectors.test.ts` pins the forwarded list in
+    both directions (what must be sent, and that cookies/authorization/referer
+    must not be).
+  - **Enforcement mode is NOT built, and needs an architecture decision.**
+    Both collectors report *after* the response has been served
+    (`ctx.waitUntil`, unawaited fetch), which is what keeps them from slowing
+    or breaking a site. Blocking on mismatch would require an inline,
+    request-path integration that waits on TrustTab before responding — a
+    different shape with real availability risk for the customer's site. The
+    spec calls enforcement opt-in and off by default; this is flagged for a
+    check-in rather than built.
+  - **Not yet live-tested end to end in production:** proving it there needs a
+    publicly reachable agent key directory to sign against, which TrustTab
+    doesn't have (it isn't an agent). The path is proven against the real
+    library, and through the real ingest path with injected keys.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon

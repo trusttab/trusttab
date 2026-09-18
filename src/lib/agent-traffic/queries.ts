@@ -106,3 +106,73 @@ export async function getSiteAgentTraffic(siteId: string, days: AgentTrafficRang
     .orderBy(sql`count(*) desc`);
   return summarize("site", days, rows);
 }
+
+export type AgentActivity = {
+  identity: string;
+  requests: number;
+  /** Declarations this agent signed, as they read in the dashboard. */
+  declarations: string[];
+  /** Requests that fell outside a declaration, with an example of each kind. */
+  mismatches: { reason: "path-outside-scope" | "purpose-not-declared"; requests: number; examplePath: string | null; declared: string | null }[];
+  paths: { path: string; requests: number }[];
+  lastSeen: Date;
+};
+
+/**
+ * Per-agent activity for a site's own pages: who, what they declared, what
+ * they actually requested, and any requests outside a declaration. Verified
+ * agents only, because a declaration is part of a signature and an identity
+ * that isn't verified can't be held to one.
+ *
+ * Only meaningful where site-wide collection is on; requests to TrustTab's own
+ * endpoints say little about how an agent behaves on the site itself.
+ */
+export async function getAgentActivity(siteId: string, days: AgentTrafficRange, limit = 10): Promise<AgentActivity[]> {
+  const inRange = and(
+    eq(siteAgentHits.siteId, siteId),
+    eq(siteAgentHits.agentTier, "verified"),
+    gte(siteAgentHits.createdAt, sql`now() - make_interval(days => ${days})`),
+  );
+
+  const rows = await db
+    .select({
+      identity: siteAgentHits.agentIdentity,
+      declaredIntent: siteAgentHits.declaredIntent,
+      scopeMismatch: siteAgentHits.scopeMismatch,
+      path: siteAgentHits.path,
+      requests: sql<number>`count(*)::int`,
+      lastSeen: sql<Date>`max(${siteAgentHits.createdAt})`,
+    })
+    .from(siteAgentHits)
+    .where(inRange)
+    .groupBy(siteAgentHits.agentIdentity, siteAgentHits.declaredIntent, siteAgentHits.scopeMismatch, siteAgentHits.path)
+    .orderBy(sql`count(*) desc`);
+
+  const byIdentity = new Map<string, AgentActivity>();
+  for (const row of rows) {
+    const identity = row.identity ?? "Unnamed";
+    const entry = byIdentity.get(identity) ?? { identity, requests: 0, declarations: [], mismatches: [], paths: [], lastSeen: new Date(row.lastSeen) };
+    entry.requests += row.requests;
+    if (row.declaredIntent && !entry.declarations.includes(row.declaredIntent)) entry.declarations.push(row.declaredIntent);
+    if (new Date(row.lastSeen) > entry.lastSeen) entry.lastSeen = new Date(row.lastSeen);
+
+    if (row.path) {
+      const path = entry.paths.find((p) => p.path === row.path);
+      if (path) path.requests += row.requests;
+      else entry.paths.push({ path: row.path, requests: row.requests });
+    }
+
+    if (row.scopeMismatch) {
+      const mismatch = entry.mismatches.find((m) => m.reason === row.scopeMismatch);
+      if (mismatch) mismatch.requests += row.requests;
+      else entry.mismatches.push({ reason: row.scopeMismatch, requests: row.requests, examplePath: row.path, declared: row.declaredIntent });
+    }
+    byIdentity.set(identity, entry);
+  }
+
+  for (const entry of byIdentity.values()) {
+    entry.paths.sort((a, b) => b.requests - a.requests);
+    entry.paths = entry.paths.slice(0, 5);
+  }
+  return [...byIdentity.values()].sort((a, b) => b.requests - a.requests).slice(0, limit);
+}

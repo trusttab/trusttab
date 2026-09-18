@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { manifestHits } from "@/db/schema";
 
 import { classifyRequest } from "./agent-traffic/classify";
+import { formatDeclaration } from "./agent-traffic/intent";
 import { anonymizeIp, clientIp } from "./ip";
 
 /** Traffic-log rows older than this are deleted. */
@@ -43,6 +44,7 @@ export function recordHit(request: Request, siteId: string, endpoint: "manifest"
         agentTier: agent.tier,
         agentIdentity: agent.identity,
         agentSignal: agent.signal,
+        declaredIntent: agent.declaration ? formatDeclaration(agent.declaration).slice(0, 400) : null,
       });
       if (Math.random() < 0.02) {
         await db

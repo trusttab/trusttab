@@ -34,7 +34,17 @@ export const SITE_SCOPE_NOTE = "This covers requests to your own pages, as repor
 /** Shown before anyone turns site-wide collection on, so the choice is informed. */
 export const COLLECTION_DISCLOSURE = [
   "This is a bigger scope than the traffic above: it covers every request to your site, not just TrustTab lookups.",
-  "Each request your collector reports sends the URL, the method, the visitor's IP and four headers (user agent and the three signature headers). No cookies, query strings, form fields or page content are sent.",
+  "Each request your collector reports sends the URL, the method, the visitor's IP and five headers (user agent, the three signature headers, and any intent declaration an agent signed). No cookies, query strings, form fields or page content are sent.",
   "TrustTab uses the IP in memory to match published agent ranges, then stores it coarsened (IPv4 /24, IPv6 /48). Rows are deleted after 30 days.",
   "Logging visitor data can carry obligations of its own (GDPR and similar). Check what your privacy notice says before turning this on.",
 ];
+
+export const DECLARED_INTENT_NOTE =
+  "Some agents sign a declaration of what they came to do, using this site's own endpoint purposes. Altering or removing that declaration breaks their signature, so a declaration shown here is one the agent really signed.";
+
+/** The boundary of this feature, stated in the product and not only in the docs. */
+export const DECLARED_INTENT_LIMIT =
+  "This only covers agents that choose to sign and declare. An agent that ignores the protocol shows up in the estimate tier like any other unsigned traffic, so nothing here is a general detector of bad behaviour.";
+
+export const MISMATCH_NOTE =
+  "A request outside a declaration is recorded as the difference between what was declared and what was requested. It can be a misconfigured agent, a redirect, or a deliberate deviation; this doesn't tell you which.";

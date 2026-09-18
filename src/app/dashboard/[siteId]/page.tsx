@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AgentActivityPanel } from "@/components/agent-activity";
 import { AgentTraffic } from "@/components/agent-traffic";
 import { BadgeSnippet } from "@/components/badge-snippet";
 import { OwnershipPanel } from "@/components/ownership-panel";
@@ -16,7 +17,7 @@ import { isUuid } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { getAssistantChanges, getOrCreateDraft } from "@/lib/drafts";
 import { manifestToInput } from "@/lib/manifest/input";
-import { getAgentTraffic, getSiteAgentTraffic, parseRange } from "@/lib/agent-traffic/queries";
+import { getAgentActivity, getAgentTraffic, getSiteAgentTraffic, parseRange } from "@/lib/agent-traffic/queries";
 import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
 import { verificationSnippet } from "@/lib/ownership";
 
@@ -32,17 +33,18 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
   if (!site) notFound();
 
   const agentDays = parseRange((await props.searchParams).agentDays);
-  const [latest, lastRun, traffic, agentTraffic, siteAgentTraffic, draft, assistantChanges] = site.ownershipVerifiedAt
+  const [latest, lastRun, traffic, agentTraffic, siteAgentTraffic, agentActivity, draft, assistantChanges] = site.ownershipVerifiedAt
     ? await Promise.all([
         getLatestManifest(site.id),
         getLatestVerificationRun(site.id),
         getTraffic(site.id),
         getAgentTraffic(site.id, agentDays),
         site.agentTrafficEnabledAt ? getSiteAgentTraffic(site.id, agentDays) : Promise.resolve(null),
+        site.agentTrafficEnabledAt ? getAgentActivity(site.id, agentDays) : Promise.resolve(null),
         getOrCreateDraft(site.id),
         getAssistantChanges(site.id),
       ])
-    : [undefined, undefined, undefined, undefined, null, undefined, []];
+    : [undefined, undefined, undefined, undefined, null, null, undefined, []];
   const issuerUrl = process.env.TRUSTTAB_ISSUER_URL?.replace(/\/+$/, "") || null;
 
   return (
@@ -109,6 +111,7 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
           collectionEnabled={site.agentTrafficEnabledAt !== null}
         />
       )}
+      {agentActivity && latest && <AgentActivityPanel agents={agentActivity} days={agentDays} />}
       {traffic && latest && <TrafficLog hits={traffic.hits} counts={traffic.counts} />}
     </div>
   );
