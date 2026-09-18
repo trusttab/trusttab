@@ -900,7 +900,12 @@ rather than silently changing direction.
     `intent-declaration`, and `collectors.test.ts` pins the forwarded list in
     both directions (what must be sent, and that cookies/authorization/referer
     must not be).
-  - **Enforcement mode is NOT built, and needs an architecture decision.**
+  - **Enforcement mode is NOT built, and when it is, it must fail open**
+    (owner decision, 2026-09-18): a strict timeout, and if TrustTab doesn't
+    answer in time the request proceeds anyway. TrustTab's own latency or
+    downtime must never be able to take a customer's site down. The decision
+    on whether to build enforcement at all is separate and still open.
+  - **Why enforcement needs that decision:**
     Both collectors report *after* the response has been served
     (`ctx.waitUntil`, unawaited fetch), which is what keeps them from slowing
     or breaking a site. Blocking on mismatch would require an inline,
