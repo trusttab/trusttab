@@ -1,10 +1,110 @@
 import Link from "next/link";
 
 import { TIER_LABELS } from "@/lib/agent-traffic/display";
+import { buildPathGraph, nodeLabel, type PathGraph } from "@/lib/agent-traffic/path-graph";
 import { AGENT_TRAFFIC_WINDOWS, windowLabel, type AgentTrafficRange, type AgentVolume } from "@/lib/agent-traffic/queries";
 import { describeTimeline, summarizeTimeline, type TimelineRequest } from "@/lib/agent-traffic/timeline";
 
 const time = (at: Date) => at.toISOString().replace("T", " ").slice(0, 19);
+
+/**
+ * The walk drawn as SVG, on the server: coordinates come from `buildPathGraph`,
+ * so there is no client JavaScript and no layout simulation. Pages requested
+ * outside a declared scope use the same amber as the rows below.
+ */
+function PathGraphDrawing({ graph, description }: { graph: PathGraph; description: string }) {
+  return (
+    <svg
+      viewBox={`0 0 ${graph.width} ${graph.height}`}
+      width="100%"
+      style={{ maxWidth: graph.width }}
+      role="img"
+      aria-label={description}
+      className="overflow-visible"
+    >
+      <desc>{description}</desc>
+      <defs>
+        <marker id="agent-path-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L8,4 L0,8 z" fill="#a1a1aa" />
+        </marker>
+      </defs>
+
+      {graph.edges.map((edge) => (
+        <path
+          key={`${edge.from}->${edge.to}`}
+          d={`M${edge.x1},${edge.y1} Q${edge.cx},${edge.cy} ${edge.x2},${edge.y2}`}
+          fill="none"
+          stroke="#a1a1aa"
+          strokeWidth={Math.min(3, 1 + (edge.count - 1) * 0.5)}
+          markerEnd="url(#agent-path-arrow)"
+          opacity={0.7}
+        >
+          <title>{`${edge.from} → ${edge.to}${edge.count > 1 ? ` (${edge.count} times)` : ""}`}</title>
+        </path>
+      ))}
+
+      {graph.nodes.map((node) => (
+        <g key={node.path}>
+          <title>{`${node.order}. ${node.path} — ${node.visits} request${node.visits === 1 ? "" : "s"}${node.outsideScope ? ", outside the declared scope" : ""}`}</title>
+          <circle
+            cx={node.x}
+            cy={node.y}
+            r={17}
+            fill={node.outsideScope ? "#fffbeb" : "#fafafa"}
+            stroke={node.outsideScope ? "#fcd34d" : "#d4d4d8"}
+            strokeWidth={node.visits > 1 ? 2 : 1}
+          />
+          <text x={node.x} y={node.y + 4} textAnchor="middle" fontSize="11" fill="#3f3f46">
+            {node.order}
+          </text>
+          <text x={node.x} y={node.y + 32} textAnchor="middle" fontSize="10" fill="#71717a">
+            {nodeLabel(node.path)}
+          </text>
+          {node.visits > 1 && (
+            <text x={node.x} y={node.y + 44} textAnchor="middle" fontSize="9" fill="#a1a1aa">
+              ×{node.visits}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * One agent's path through the site: which pages, in what order. The drawing is
+ * for reading the shape of a session — a directory swept in order looks nothing
+ * like a session that keeps returning to the same few pages — and it gives way
+ * to the same facts in words once there is too much to draw legibly.
+ */
+function PathGraphSection({ requests }: { requests: TimelineRequest[] }) {
+  const result = buildPathGraph(requests);
+  if (result.kind === "empty") return null;
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-medium text-zinc-700">Pages visited, in order</h4>
+      {result.kind === "graph" ? (
+        <>
+          <div className="overflow-x-auto rounded-md border border-zinc-200 bg-white p-2">
+            <PathGraphDrawing graph={result.graph} description={result.description} />
+          </div>
+          <p className="text-xs text-zinc-500">
+            Numbered in the order each page was first requested; arrows follow the moves between them, and a thicker ring
+            means the page was requested more than once. {result.description}
+          </p>
+        </>
+      ) : (
+        <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+          <p className="text-xs text-zinc-700">{result.description}</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Not drawn: {result.reason}, so it would be an unreadable tangle. The requests themselves are listed below.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Server component: agents ranked by request volume, and one agent's requests
@@ -101,6 +201,8 @@ export function AgentTimelinePanel({
               <p className="mt-0.5">{readout.rateDetail}</p>
             </div>
           )}
+
+          {requests.length > 0 && <PathGraphSection requests={requests} />}
 
           {requests.length === 0 ? (
             <p className="text-sm text-zinc-500">No requests from this agent in this window.</p>
