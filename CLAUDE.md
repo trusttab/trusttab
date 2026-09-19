@@ -1042,6 +1042,15 @@ rather than silently changing direction.
     payload, API) in every string it produces, and another pins that every
     failing check yields a task, so an owner is never only told something is
     wrong.
+  - **The panels underneath keep the protocol's vocabulary** (owner decision,
+    2026-09-19). They are opt-in content someone reached by asking for detail,
+    so rewriting them for a non-technical reader was considered and declined
+    rather than left open. The plain-language obligation is on what the owner
+    meets first.
+  - **`summarizeSite` needs extending with each new check** (flagged in open
+    questions): a new check or a new `sites.status` needs its own sentence and
+    task, and the jargon and every-failure-has-a-task tests only catch a
+    missing case once the new check is in their fixtures.
   - **The assistant is one click away, not duplicated.** "Explain this in plain
     English" hands the existing "Explain my latest check results" capability to
     the one assistant panel further down the page via a DOM event
@@ -1141,10 +1150,6 @@ publish.
   today. A new check, or a new `sites.status`, needs a sentence and a task
   added to `summarizeSite` — the jargon and every-failure-has-a-task tests will
   catch a missing case only if the new check is added to their fixtures.
-- The dashboard restructure changes what an owner meets first, but the panels
-  underneath are unchanged, so each one still speaks the protocol's vocabulary
-  once opened. Whether those should also be rewritten for a non-technical
-  reader is a separate product decision, not attempted here.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.
