@@ -12,3 +12,13 @@
 body {
   @apply bg-zinc-50 text-zinc-900;
 }
+
+/*
+ * The shell is 56rem (max-w-4xl) for every page. A page that needs more room
+ * marks its own root element instead of the layout special-casing routes:
+ * today only the site dashboard does, for its two-column assistant layout.
+ * Without :has() support the page simply stays at the default width.
+ */
+main:has(> [data-shell="wide"]) {
+  max-width: 80rem;
+}

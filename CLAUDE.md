@@ -1058,6 +1058,39 @@ rather than silently changing direction.
     conversation, two entry points. The button only renders when the assistant
     is configured.
 
+- **2026-09-19 — The assistant moves into its own column.** Layout only: no
+  change to what the assistant can do, what it can reach, or who can publish.
+  - **Two columns from `lg` up**: the site on the left, the assistant sticky on
+    the right. Below `lg` it is one column, and the DOM order puts the assistant
+    **directly after the plain-language summary**, before the technical
+    sections, so a phone reads "what's true / ask about it / the detail".
+  - **Mobile is stacking, not a slide-over** (owner decision, 2026-09-19). A
+    sheet is the only option that needs modal semantics — focus trap, Escape,
+    body-scroll lock, `aria-modal`, focus restore — and on a phone the page's
+    own scroll is the interaction model. Stacking it *second* rather than last
+    is what fixes discoverability; it is pure CSS, with no JavaScript and
+    nothing to trap. A sticky "Ask" pill was considered and cut for v1: revisit
+    only if the reordering turns out not to be enough.
+  - **The assistant/editor coupling survives the split.** The editor's pending
+    edits are flushed before each message, the editor locks while the assistant
+    works, and the draft reloads afterwards. Those three were props inside one
+    component; rearranging the page would have silently dropped them, so they
+    moved into `SiteWorkspaceProvider`, a context both columns render inside.
+    Verified in the browser by request ordering: an unsaved edit produced a
+    `PUT /draft` **before** the `POST /assistant` that followed it, the editor
+    showed "Draft saved", and its fieldset was disabled while the assistant ran.
+  - **"Your declared forms" is now just the manifest editor**, as the assistant
+    no longer lives inside it. `#forms` still targets it.
+  - **Only this page is wider** (owner decision): `max-w-7xl` instead of the
+    shell's `max-w-4xl`, because two columns inside 896px leave both cramped and
+    the path-graph SVG alone runs to ~826px. Rather than special-casing routes in
+    the layout or touching all 13 pages, the page marks its own root element
+    (`data-shell="wide"`) and one rule in `globals.css` widens the shell around
+    it. It is set only when there is an assistant column to fill it, so a
+    deployment with no `ANTHROPIC_API_KEY` keeps the standard width instead of
+    stretching one column of prose across 1280px — and without `:has()` support
+    a browser simply gets the default width.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon

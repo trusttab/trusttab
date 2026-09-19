@@ -172,7 +172,12 @@ export function AssistantPanel({ siteId, domain, beforeSend, onBusyChange, onDra
   }
 
   return (
-    <section id={ASSISTANT_ANCHOR} className="space-y-3 rounded-lg border border-zinc-200 bg-white p-5">
+    <section
+      id={ASSISTANT_ANCHOR}
+      // In its own column the panel fills the viewport height and scrolls its
+      // transcript internally; stacked on a phone it is just a card that grows.
+      className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-5 lg:max-h-[calc(100vh-6rem)]"
+    >
       <div>
         <h2 className="font-medium">Assistant</h2>
         <p className="mt-1 text-sm text-zinc-600">
@@ -182,7 +187,7 @@ export function AssistantPanel({ siteId, domain, beforeSend, onBusyChange, onDra
       </div>
 
       {messages.length > 0 && (
-        <div ref={scroller} className="max-h-96 space-y-3 overflow-y-auto rounded-md bg-zinc-50 p-3 text-sm">
+        <div ref={scroller} className="max-h-96 min-h-0 space-y-3 overflow-y-auto rounded-md bg-zinc-50 p-3 text-sm lg:max-h-none lg:flex-1">
           {messages.map((m, i) =>
             m.role === "user" ? (
               <p key={i} className="ml-auto max-w-[85%] rounded-lg bg-zinc-900 px-3 py-2 whitespace-pre-wrap text-white">

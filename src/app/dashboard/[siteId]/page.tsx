@@ -9,7 +9,7 @@ import { OwnerAgents } from "@/components/owner-agents";
 import { BadgeSnippet } from "@/components/badge-snippet";
 import { OwnershipPanel } from "@/components/ownership-panel";
 import { SiteSummaryPanel } from "@/components/site-summary";
-import { SiteWorkspace } from "@/components/site-workspace";
+import { AssistantColumn, ManifestEditorSection, SiteWorkspaceProvider } from "@/components/site-workspace";
 import { PublishedManifest } from "@/components/published-manifest";
 import { siteStatusLabel, siteStatusTone, StatusPill } from "@/components/status-pill";
 import { TechnicalDetails } from "@/components/technical-details";
@@ -73,6 +73,10 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
   // else starts closed.
   const primaryTarget = summary.actions[0]?.target ?? null;
 
+  // Whether there is an assistant column at all decides whether this page is
+  // two-column: without a key there is nothing to put in the second one.
+  const assistantEnabled = Boolean(process.env.ANTHROPIC_API_KEY) && Boolean(site.ownershipVerifiedAt) && Boolean(draft);
+
   // One plain line about who has been requesting the site, for the summary.
   const identified = siteAgentTraffic
     ? siteAgentTraffic.totals.verified + siteAgentTraffic.totals.likely_automated + siteAgentTraffic.totals.owner_identified
@@ -84,7 +88,11 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
     : null;
 
   return (
-    <div className="space-y-6">
+    // data-shell="wide" asks the layout for its wider container (globals.css),
+    // but only when there is a second column to fill it. Without the assistant
+    // the page keeps the standard width rather than stretching one column of
+    // prose across 1280px.
+    <div data-shell={assistantEnabled ? "wide" : undefined} className="space-y-6">
       <div className="space-y-2">
         <Link href="/dashboard" className="text-sm text-zinc-500 hover:underline">
           ← All sites
@@ -95,124 +103,145 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
         </div>
       </div>
 
-      <SiteSummaryPanel
-        siteId={site.id}
-        summary={summary}
-        badgeUrl={site.verificationId && issuerUrl ? `/api/badge/${site.verificationId}.svg` : null}
-        canRun={Boolean(site.ownershipVerifiedAt && latest)}
-        assistantEnabled={Boolean(process.env.ANTHROPIC_API_KEY) && Boolean(site.ownershipVerifiedAt)}
-        agentLine={agentLine}
-      />
+      {/*
+        Two columns from `lg` up: everything about the site on the left, the
+        assistant sticky on the right. Below `lg` it is one column, and the DOM
+        order puts the assistant directly after the summary — so on a phone the
+        order is "what's true / ask about it / the detail", rather than burying
+        the assistant under the whole page.
+      */}
+      <SiteWorkspaceProvider>
+        <div className={`grid gap-6 ${assistantEnabled ? "lg:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+          <div className="lg:col-start-1 lg:row-start-1">
+            <SiteSummaryPanel
+              siteId={site.id}
+              summary={summary}
+              badgeUrl={site.verificationId && issuerUrl ? `/api/badge/${site.verificationId}.svg` : null}
+              canRun={Boolean(site.ownershipVerifiedAt && latest)}
+              assistantEnabled={assistantEnabled}
+              agentLine={agentLine}
+            />
+          </div>
 
-      {!issuerUrl && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          This TrustTab instance has no issuer configured (TRUSTTAB_ISSUER_NAME / TRUSTTAB_ISSUER_URL), so manifests
-          can&apos;t be published yet.
-        </p>
-      )}
+          {assistantEnabled && (
+            <aside className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+              <div className="lg:sticky lg:top-4">
+                <AssistantColumn siteId={site.id} domain={site.domain} />
+              </div>
+            </aside>
+          )}
 
-      {/* Ownership is the whole task until it's done, so it stays open until then. */}
-      {site.ownershipVerifiedAt ? (
-        <TechnicalDetails id="ownership" title="Domain ownership" note="How this site was claimed">
-          <OwnershipPanel
-            siteId={site.id}
-            domain={site.domain}
-            snippet={verificationSnippet(site.verificationToken)}
-            ownershipVerifiedAt={site.ownershipVerifiedAt.toISOString()}
-          />
-        </TechnicalDetails>
-      ) : (
-        <div id="ownership">
-          <OwnershipPanel
-            siteId={site.id}
-            domain={site.domain}
-            snippet={verificationSnippet(site.verificationToken)}
-            ownershipVerifiedAt={null}
-          />
+          <div className="space-y-6 lg:col-start-1 lg:row-start-2">
+            {!issuerUrl && (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                This TrustTab instance has no issuer configured (TRUSTTAB_ISSUER_NAME / TRUSTTAB_ISSUER_URL), so
+                manifests can&apos;t be published yet.
+              </p>
+            )}
+
+            {/* Ownership is the whole task until it's done, so it stays open until then. */}
+            {site.ownershipVerifiedAt ? (
+              <TechnicalDetails id="ownership" title="Domain ownership" note="How this site was claimed">
+                <OwnershipPanel
+                  siteId={site.id}
+                  domain={site.domain}
+                  snippet={verificationSnippet(site.verificationToken)}
+                  ownershipVerifiedAt={site.ownershipVerifiedAt.toISOString()}
+                />
+              </TechnicalDetails>
+            ) : (
+              <div id="ownership">
+                <OwnershipPanel
+                  siteId={site.id}
+                  domain={site.domain}
+                  snippet={verificationSnippet(site.verificationToken)}
+                  ownershipVerifiedAt={null}
+                />
+              </div>
+            )}
+
+            {site.ownershipVerifiedAt && (
+              <>
+                <TechnicalDetails
+                  id="checks"
+                  title="Verification checks"
+                  note="Every check, with what was found on each page"
+                  defaultOpen={primaryTarget === "checks"}
+                >
+                  <VerificationPanel siteId={site.id} domain={site.domain} run={lastRun} canRun={Boolean(latest)} />
+                </TechnicalDetails>
+
+                {draft && (
+                  <TechnicalDetails
+                    id="forms"
+                    title="Your declared forms"
+                    note="Edit what you declare"
+                    defaultOpen={primaryTarget === "forms"}
+                  >
+                    <ManifestEditorSection
+                      siteId={site.id}
+                      draft={{ input: draft.input, version: draft.version, hash: draft.hash }}
+                      published={latest ? manifestToInput(latest.payloadJson) : null}
+                      assistantChanges={assistantChanges.map((c) => ({ id: c.id, summary: c.summary, reason: c.reason }))}
+                    />
+                  </TechnicalDetails>
+                )}
+
+                {latest && issuerUrl && (
+                  <TechnicalDetails
+                    id="manifest"
+                    title="Published document and how to serve it"
+                    note="The signed JSON, and the redirect or tag your site needs"
+                    defaultOpen={primaryTarget === "manifest"}
+                  >
+                    <PublishedManifest
+                      manifest={latest}
+                      domain={site.domain}
+                      issuerUrl={issuerUrl}
+                      expired={isManifestExpired(latest.expiresAt)}
+                    />
+                  </TechnicalDetails>
+                )}
+              </>
+            )}
+
+            {site.verificationId && issuerUrl && (
+              <TechnicalDetails id="badge" title="Badge embed code" note="Paste this into your site">
+                <BadgeSnippet issuerUrl={issuerUrl} verificationId={site.verificationId} />
+              </TechnicalDetails>
+            )}
+
+            {agentTraffic && latest && (
+              <TechnicalDetails
+                id="agents"
+                title="Agent traffic"
+                note="Who has been requesting this site, and how that was established"
+                // Opening an agent's timeline reloads the page, so keep the section
+                // open when the owner is looking at one.
+                defaultOpen={Boolean(selectedAgent) || typeof search.window === "string"}
+              >
+                <AgentTraffic
+                  siteId={site.id}
+                  summary={agentTraffic}
+                  siteSummary={siteAgentTraffic ?? null}
+                  collectionEnabled={site.agentTrafficEnabledAt !== null}
+                />
+                {agentActivity && <AgentActivityPanel agents={agentActivity} windowText={windowLabel(agentDays)} />}
+                {agentVolume && (
+                  <AgentTimelinePanel siteId={site.id} range={agentDays} agents={agentVolume} selected={selectedAgent} requests={agentTimeline} />
+                )}
+                <OwnerAgents siteId={site.id} agents={registeredAgents} />
+              </TechnicalDetails>
+            )}
+
+            {traffic && latest && (
+              <TechnicalDetails id="logs" title="Request log" note="Raw requests to this site's public TrustTab endpoints">
+                <TrafficLog hits={traffic.hits} counts={traffic.counts} />
+              </TechnicalDetails>
+            )}
+          </div>
         </div>
-      )}
-
-      {site.ownershipVerifiedAt && (
-        <>
-          <TechnicalDetails
-            id="checks"
-            title="Verification checks"
-            note="Every check, with what was found on each page"
-            defaultOpen={primaryTarget === "checks"}
-          >
-            <VerificationPanel siteId={site.id} domain={site.domain} run={lastRun} canRun={Boolean(latest)} />
-          </TechnicalDetails>
-
-          {draft && (
-            <TechnicalDetails
-              id="forms"
-              title="Your declared forms"
-              note="Edit what you declare, and ask the assistant"
-              defaultOpen={primaryTarget === "forms"}
-            >
-              <SiteWorkspace
-                siteId={site.id}
-                domain={site.domain}
-                draft={{ input: draft.input, version: draft.version, hash: draft.hash }}
-                published={latest ? manifestToInput(latest.payloadJson) : null}
-                assistantChanges={assistantChanges.map((c) => ({ id: c.id, summary: c.summary, reason: c.reason }))}
-                assistantEnabled={Boolean(process.env.ANTHROPIC_API_KEY)}
-              />
-            </TechnicalDetails>
-          )}
-
-          {latest && issuerUrl && (
-            <TechnicalDetails
-              id="manifest"
-              title="Published document and how to serve it"
-              note="The signed JSON, and the redirect or tag your site needs"
-              defaultOpen={primaryTarget === "manifest"}
-            >
-              <PublishedManifest
-                manifest={latest}
-                domain={site.domain}
-                issuerUrl={issuerUrl}
-                expired={isManifestExpired(latest.expiresAt)}
-              />
-            </TechnicalDetails>
-          )}
-        </>
-      )}
-
-      {site.verificationId && issuerUrl && (
-        <TechnicalDetails id="badge" title="Badge embed code" note="Paste this into your site">
-          <BadgeSnippet issuerUrl={issuerUrl} verificationId={site.verificationId} />
-        </TechnicalDetails>
-      )}
-
-      {agentTraffic && latest && (
-        <TechnicalDetails
-          id="agents"
-          title="Agent traffic"
-          note="Who has been requesting this site, and how that was established"
-          // Opening an agent's timeline reloads the page, so keep the section
-          // open when the owner is looking at one.
-          defaultOpen={Boolean(selectedAgent) || typeof search.window === "string"}
-        >
-          <AgentTraffic
-            siteId={site.id}
-            summary={agentTraffic}
-            siteSummary={siteAgentTraffic ?? null}
-            collectionEnabled={site.agentTrafficEnabledAt !== null}
-          />
-          {agentActivity && <AgentActivityPanel agents={agentActivity} windowText={windowLabel(agentDays)} />}
-          {agentVolume && (
-            <AgentTimelinePanel siteId={site.id} range={agentDays} agents={agentVolume} selected={selectedAgent} requests={agentTimeline} />
-          )}
-          <OwnerAgents siteId={site.id} agents={registeredAgents} />
-        </TechnicalDetails>
-      )}
-
-      {traffic && latest && (
-        <TechnicalDetails id="logs" title="Request log" note="Raw requests to this site's public TrustTab endpoints">
-          <TrafficLog hits={traffic.hits} counts={traffic.counts} />
-        </TechnicalDetails>
-      )}
+      </SiteWorkspaceProvider>
     </div>
   );
 }
