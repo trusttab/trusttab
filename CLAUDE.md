@@ -984,6 +984,71 @@ rather than silently changing direction.
     than something each site has to configure. Registration routes require
     both same-origin browser requests and site ownership.
 
+- **2026-09-19 — Agent path graph, and a plain-language dashboard.** Two
+  separate pieces of work, both owner-facing.
+  - **Spec note:** the owner asked for the path graph from an updated
+    AGENT_TRAFFIC_DETECTION_SPEC, but no updated file ever reached the machine;
+    the newest copy is still the one the timeline was built from, and it argues
+    *against* a graph ("not a relationship graph… would be smeared together in
+    a dense multi-entity graph"). That objection is to a **multi-entity** graph.
+    This is one agent at a time, which doesn't have that failure mode, so it was
+    built from the owner's own description with that discrepancy flagged first.
+  - **What the graph shows:** the pages one agent requested, numbered in
+    first-visit order, with arrows for the moves between them, a thicker ring
+    for a page requested more than once, and the declared-intent amber on any
+    page requested outside a declared scope. It answers a question the
+    chronological table can't: the *shape* of a session. A directory swept in
+    order and a session that keeps returning to three pages look identical as a
+    list of rows.
+  - **No graph library, deliberately.** d3-force, cytoscape and the rest solve
+    *general* graph layout with a physics simulation: heavy, client-side, and
+    non-deterministic, so the same data draws differently on each load. This is
+    a walk with a known visit order, so layout is a sort and some arithmetic
+    (`src/lib/agent-traffic/path-graph.ts`), it renders as server-side SVG with
+    no client JavaScript, and a test pins that identical data lays out
+    identically. This is not a contradiction of "reuse over rebuild" (web-bot-auth,
+    c2pa): that rule is for things which are hard and dangerous to get wrong.
+  - **Two thresholds, not one** (owner decision, 2026-09-19): the text summary
+    replaces the drawing above **40 distinct pages or 120 distinct page-to-page
+    moves**, whichever trips first. Node count alone is the wrong test — 40 pages
+    visited once each is a clean chain of 39 moves, while 12 pages visited in
+    every combination is several hundred overlapping arcs at a third of the node
+    count. A test pins the second case, which the node limit alone would pass.
+  - **The honest limit:** a wide sweep — the traffic this is most associated
+    with — will always fall back to text, because hundreds of pages can't be
+    drawn legibly. So the graph is for reading the shape of small and medium
+    sessions; the rate and breadth readouts above it remain the signal. The
+    fallback says which threshold it passed and by how much.
+  - The same text is the drawing's `<desc>`, so the non-visual path isn't a
+    second-class one, and a test forbids "scraper", "attack", "malicious" and
+    similar in every string it can produce.
+  - **The dashboard now leads with plain language.** A non-technical owner was
+    meeting raw manifest JSON, a `vercel.json` snippet and request logs first.
+    `/dashboard/[siteId]` now opens with what is true right now, what to do
+    next, and the live badge image; everything technical — checks, the signed
+    JSON, redirect configuration, the editor, agent traffic, request logs —
+    moved under `TechnicalDetails` disclosures. **Nothing was removed.** Native
+    `<details>`, so deep links (`#checks`) and find-in-page still work with no
+    client JavaScript, and the section the owner's first task points at opens by
+    default.
+  - **The summary is derived, not generated** (owner decision, 2026-09-19, over
+    auto-running the assistant or caching its answer per run). Decisive reason:
+    the assistant is gated on `ANTHROPIC_API_KEY`, so a model-written summary
+    would show a non-technical owner *nothing at all* on a deployment without
+    that key — exactly the audience this is for. `summarizeSite`
+    (`src/lib/verification/summary.ts`) maps the stored run to sentences, so it
+    is instant, free, identical on every load, and always present. A test
+    forbids the dashboard's own vocabulary (manifest, JSON, endpoint, schema,
+    payload, API) in every string it produces, and another pins that every
+    failing check yields a task, so an owner is never only told something is
+    wrong.
+  - **The assistant is one click away, not duplicated.** "Explain this in plain
+    English" hands the existing "Explain my latest check results" capability to
+    the one assistant panel further down the page via a DOM event
+    (`explain-request.ts`), opening any closed disclosure above it first. One
+    conversation, two entry points. The button only renders when the assistant
+    is configured.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1068,6 +1133,18 @@ publish.
 - The agent timeline shows at most 500 requests per agent per window. A
   busier window is truncated (the UI says so), and the volume counts above it
   stay complete. Paging is not built.
+- The path graph's thresholds (40 pages, 120 moves, `MAX_GRAPH_NODES` and
+  `MAX_GRAPH_EDGES`) are judgment calls about legibility, like the rate flag's
+  threshold, not measurements. They have not been checked against a real busy
+  session on a range of screen sizes.
+- The plain-language summary is written for the states the checks can produce
+  today. A new check, or a new `sites.status`, needs a sentence and a task
+  added to `summarizeSite` — the jargon and every-failure-has-a-task tests will
+  catch a missing case only if the new check is added to their fixtures.
+- The dashboard restructure changes what an owner meets first, but the panels
+  underneath are unchanged, so each one still speaks the protocol's vocabulary
+  once opened. Whether those should also be rewritten for a non-technical
+  reader is a separate product decision, not attempted here.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

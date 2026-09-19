@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { ASSISTANT_ANCHOR, EXPLAIN_CHECKS_PROMPT, onAskAssistant } from "./explain-request";
 
 type ToolStep = { name: string; status: "started" | "done" | "error"; summary?: string };
 type ClaimProposal = { domain: string; reason: string; state: "pending" | "claiming" | "claimed" | "dismissed"; siteId?: string; error?: string };
@@ -31,7 +33,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 const SUGGESTIONS = [
   "Draft my manifest from my site's forms",
-  "Explain my latest check results",
+  EXPLAIN_CHECKS_PROMPT,
   "Preview the checks for my draft",
 ];
 
@@ -139,6 +141,15 @@ export function AssistantPanel({ siteId, domain, beforeSend, onBusyChange, onDra
     }
   }
 
+  // The plain-language summary at the top of the page hands its "explain this"
+  // question here rather than opening a second chat. `send` closes over the
+  // conversation so far, so the listener goes through a ref kept up to date.
+  const latestSend = useRef(send);
+  useEffect(() => {
+    latestSend.current = send;
+  });
+  useEffect(() => onAskAssistant((prompt) => void latestSend.current(prompt)), []);
+
   /** The owner's click is what claims the domain; the assistant only proposed it. */
   async function claim(messageIndex: number, domainToClaim: string) {
     const setClaim = (patch: Partial<ClaimProposal>) =>
@@ -161,7 +172,7 @@ export function AssistantPanel({ siteId, domain, beforeSend, onBusyChange, onDra
   }
 
   return (
-    <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-5">
+    <section id={ASSISTANT_ANCHOR} className="space-y-3 rounded-lg border border-zinc-200 bg-white p-5">
       <div>
         <h2 className="font-medium">Assistant</h2>
         <p className="mt-1 text-sm text-zinc-600">
