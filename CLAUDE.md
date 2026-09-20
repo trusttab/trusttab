@@ -1091,6 +1091,49 @@ rather than silently changing direction.
     stretching one column of prose across 1280px — and without `:has()` support
     a browser simply gets the default width.
 
+- **2026-09-19 — Landing page: five stages, four of them real.** The homepage
+  now tells the product's actual story — detection, verification, identity,
+  authorization, protection — and the whole design problem is that the fifth
+  doesn't exist. Presenting it as a capability would break the rule every other
+  part of this product already follows: estimates labelled estimates,
+  Self-declared never shown as Verified, a scope mismatch stated rather than
+  accused. Marketing copy is where that rule is easiest to break and hardest to
+  notice, so it is enforced in code.
+  - **`src/lib/landing/stages.ts` is the single source of truth**, with a
+    `shipped` boolean, the same explicit-list pattern as the widget signatures
+    and brand lists. The page renders `SHIPPED_STAGES` and `NEXT_STAGES` in
+    separate sections and never the combined list, so an unshipped stage cannot
+    reach "Available now".
+  - **`stages.test.ts` pins the honesty**, not just the data: exactly one
+    unshipped stage; it states plainly that it isn't built; it carries no
+    present-indicative capability verb (blocks, protects, prevents, "you
+    can"…), so describing what it *would* do is fine and claiming it *does* is
+    not; and it has no call to action. Also pinned: the Identity disclaimer,
+    the Detection estimate labelling, and "Self-declared — never Verified".
+  - **Unshipped is visually a different thing, not a differently-badged card.**
+    The four shipped stages are bordered cards with a link. Protection is not a
+    card at all: no fill, no box, a dashed left rule, muted type, a "Not built
+    yet" pill, and nowhere to click. The wording is "Not built yet" rather than
+    "Coming soon" (owner decision, 2026-09-19) — a fact, rather than a
+    commitment with no date behind it.
+  - **Three overclaims caught while drafting, all fixed in the copy:**
+    - Detection is shipped but *not distributed* — the extension isn't in the
+      Chrome Web Store, so "available" without qualification would be false.
+      The card says so and points at the repository.
+    - Identity and Authorization cover requests that reach TrustTab with
+      nothing installed, but seeing agents on a site's *own* pages needs the
+      collector, which is limited release pending the GDPR/DPA gate. Both cards
+      state that coverage rather than implying site-wide visibility.
+    - A stage called **Identity** runs straight at "What TrustTab is NOT". Its
+      copy disclaims it in the stage itself ("doesn't issue agent identity or
+      authorize transactions — it checks the signatures agents already
+      present"), a test pins the disclaimer, and the TAP/AP2 footnote stays at
+      the foot of the page.
+  - **The Protection copy names the fail-open constraint** already locked in
+    for enforcement mode. It is the one place where describing something
+    unbuilt still earns credibility, because it states a limit rather than
+    promising a capability.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1183,6 +1226,12 @@ publish.
   today. A new check, or a new `sites.status`, needs a sentence and a task
   added to `summarizeSite` — the jargon and every-failure-has-a-task tests will
   catch a missing case only if the new check is added to their fixtures.
+- The landing page's stage list goes stale the moment a stage ships or its
+  coverage changes: `src/lib/landing/stages.ts` has to be updated by hand, and
+  its test can only catch an unshipped stage being described as a working one,
+  not a shipped one whose caveat is now wrong. Re-read it when the extension
+  reaches the Chrome Web Store, when the collector clears the DPA gate, and if
+  enforcement mode is ever built.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.
