@@ -63,6 +63,26 @@ const JWKS_PATH = "/.well-known/jwks.json";
 const FEED_SIGNATURE_HEADER = "x-trusttab-signature";
 /** Don't hammer TrustTab if the feed is failing; retry no faster than this. */
 const FEED_RETRY_MS = 30_000;
+/**
+ * A hard cap on the feed fetch. Observation must never be able to delay or
+ * prevent the traffic report: reporting is this Worker's actual job, and the
+ * enforcement observation is an extra that has to stay subordinate to it.
+ */
+const FEED_TIMEOUT_MS = 2_000;
+
+/**
+ * Runs the observation against a wall-clock deadline and gives up on it
+ * otherwise.
+ *
+ * `AbortSignal.timeout` on the fetch is not enough on its own: it relies on the
+ * runtime honouring the signal, and anything that never settles for some other
+ * reason would still hold the report open. This bounds the whole observation
+ * from the outside, so the traffic report goes out on time whatever happens
+ * inside it.
+ */
+function withDeadline(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+}
 
 const worker = {
   async fetch(request, env, ctx) {
@@ -124,7 +144,10 @@ async function currentFeed(env) {
   feedState = { feed: null, nextFetchAt: now + FEED_RETRY_MS };
 
   try {
-    const res = await fetch(`${baseUrl(env)}${FEED_PATH}`, { headers: { authorization: `Bearer ${env.TRUSTTAB_TOKEN}` } });
+    const res = await fetch(`${baseUrl(env)}${FEED_PATH}`, {
+      headers: { authorization: `Bearer ${env.TRUSTTAB_TOKEN}` },
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const body = await res.text();
     const jwks = await loadJwks(env);
@@ -279,24 +302,34 @@ async function report(request, env) {
 
   // Observation only, and only when the operator opted in and a live feed says
   // "observe". Its absence changes nothing about the request or the report.
+  //
+  // Wrapped so it can never take reporting down with it. Reporting traffic is
+  // what this Worker is for; observing enforcement is an addition, and an
+  // addition that can silence the thing it was added to is worse than not
+  // having it. Anything that throws or times out here costs the observation
+  // for this request and nothing else.
   let observed = null;
   if (env.TRUSTTAB_FEED) {
-    const feed = await currentFeed(env);
-    if (feed) {
-      const reason = evaluate(request, feed);
-      // The edge's own signature verdict, reported alongside TrustTab's. The
-      // two are not checking the same bytes — TrustTab rebuilds the request
-      // from what this Worker forwards — so they can legitimately differ, and
-      // the dashboard names which kind of difference it is.
-      const signature = await verifySignatureLocally(request, feed);
-      observed = {
-        would_block: reason !== null,
-        reason,
-        feed_issued_at: feed.issued_at,
-        signature_verdict: signature.verdict,
-        signature_identity: signature.identity ?? null,
-        covered_components: signature.components ?? null,
-      };
+    try {
+      const feed = await withDeadline(currentFeed(env), FEED_TIMEOUT_MS);
+      if (feed) {
+        const reason = evaluate(request, feed);
+        // The edge's own signature verdict, reported alongside TrustTab's. The
+        // two are not checking the same bytes — TrustTab rebuilds the request
+        // from what this Worker forwards — so they can legitimately differ, and
+        // the dashboard names which kind of difference it is.
+        const signature = (await withDeadline(verifySignatureLocally(request, feed), FEED_TIMEOUT_MS)) ?? { verdict: "unavailable" };
+        observed = {
+          would_block: reason !== null,
+          reason,
+          feed_issued_at: feed.issued_at,
+          signature_verdict: signature.verdict,
+          signature_identity: signature.identity ?? null,
+          covered_components: signature.components ?? null,
+        };
+      }
+    } catch {
+      observed = null;
     }
   }
 
