@@ -1244,10 +1244,12 @@ rather than silently changing direction.
     silently curled by moving strings into props, and two table column headers
     lost when the tier table became cards (reverted to a restyled table, which
     keeps them). `/for-agents` and `/for-security` now diff to zero.
-    **One intended delta remains on the landing page:** the three steps render
-    their number as the card's "01" numeral instead of a "1. " text prefix. The
-    numeral is lifted out of the existing string rather than added beside it, so
-    no word changed and the step isn't numbered twice.
+    The one remaining delta — the three steps rendering their number as a "01"
+    numeral instead of the "1. " text prefix — was **reverted at the owner's
+    request** (2026-09-19). It looked better and changed no words, but it was
+    the single place where rendered text differed from the reviewed copy, and
+    the copy wins. All three marketing pages now render byte-identical text to
+    the pre-restyle site.
   - **Width:** the three marketing pages opt into the existing
     `data-shell="wide"` mechanism. The header nav had to follow, or the logo sat
     inset from the content below it — one `body:has(...)` rule, since the header

@@ -63,19 +63,17 @@ export function DarkPanel({ children, className = "" }: { children: React.ReactN
 }
 
 /**
- * A numbered card, for a sequence of steps.
+ * A card for one step in a sequence.
  *
- * The number is lifted out of the step's own "1. …" prefix rather than added
- * alongside it, so the card gains the numeral without a word of the reviewed
- * copy changing and without the step being numbered twice.
+ * The step's number stays inline in its own title, exactly as written. An
+ * earlier version lifted it out into a separate numeral: it looked better, but
+ * it was the one place on the site where the rendered text differed from the
+ * reviewed copy, and the owner chose the copy.
  */
 export function StepCard({ title, body }: { title: string; body: string }) {
-  const match = /^(\d+)\.\s*(.*)$/.exec(title);
-  const [number, heading] = match ? [match[1], match[2]] : [null, title];
   return (
     <div className="flex h-full flex-col rounded-xl border border-zinc-200 bg-white p-6">
-      {number && <span className="font-mono text-xs tabular-nums text-zinc-400">{number.padStart(2, "0")}</span>}
-      <h3 className={`text-sm font-semibold tracking-tight ${number ? "mt-4" : ""}`}>{heading}</h3>
+      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-zinc-600">{body}</p>
     </div>
   );
