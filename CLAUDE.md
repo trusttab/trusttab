@@ -1344,9 +1344,28 @@ rather than silently changing direction.
   - **The banner sits above the numbers and beside the fix**, directly under
     "Your own pages" and immediately above the collection toggle and token
     controls, so the diagnosis and the remedy are in one place.
-  - **Still unresolved at time of writing:** leasetab.com's token was rotated,
-    but production shows zero rows and no contact yet. That is now answerable
-    from the dashboard rather than the database, which was the point.
+  - **Root cause, found once the indicator existed** (owner, 2026-09-20): the
+    token had been set with `wrangler secret put <token-value>` — passing the
+    token as the secret's *name*. Two secrets existed under token-shaped names
+    and `env.TRUSTTAB_TOKEN` never existed at all, so the Worker ran, reported
+    nothing, and said nothing about it. Confirmed fixed: "Your collector is
+    connected — last reached TrustTab 11 minutes ago."
+  - **The diagnostic gap that let this run for weeks, and would again.**
+    Checking a token with `curl -H "Authorization: Bearer …"` against the
+    TrustTab endpoint proves **the server accepts that token**. It proves
+    nothing about whether the Worker is configured with it. Both facts can be
+    true at once — valid token, Worker with no `TRUSTTAB_TOKEN` — and they look
+    like a contradiction, which is why the diagnosis stalled: the curl kept
+    passing while the collector stayed silent.
+
+    This is the same family as the deploy-marker mistake earlier in the same
+    session: **a check aimed at the wrong component cannot detect the failure
+    it is meant to catch, and its passing reads as evidence.** For collectors
+    the rule is to verify outwards from the Worker — `wrangler secret list`
+    first, then the route, then the deployed code — and to treat the dashboard's
+    own "has this collector ever connected" indicator as the only check that
+    covers the whole path. collectors/README.md now leads with it and says
+    plainly what the curl does and doesn't establish.
 
 ## Status at the end of the 5-day build (2026-09-14)
 

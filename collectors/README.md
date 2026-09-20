@@ -106,14 +106,65 @@ Worker left running can no longer report.
 
 ## Verifying it works
 
-After deploying, request a page with a known agent user agent:
+Check the dashboard first: under *Agent traffic → Your own pages* it says
+whether your collector has reached TrustTab at all, and when. That is the one
+check that tests the whole path — Worker deployed, token configured on it,
+route matching, TrustTab reachable.
+
+- **"Your collector is connected"** — the token works. You can stop here.
+- **"Your collector has never reached TrustTab"** — something between your
+  Worker and TrustTab is wrong. See below.
+
+Then, to confirm classification end to end, request a page with a known agent
+user agent:
 
 ```bash
 curl -A "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)" https://your-site.example/
 ```
 
-It should appear in the dashboard under *Likely automated (estimate)* within a
-few seconds.
+It should appear under *Likely automated (estimate)* within a few seconds.
+
+### Setting the token, exactly
+
+`wrangler secret put` takes the secret's **name** as its argument and asks for
+the value interactively. Passing the token itself creates a secret *named*
+after your token, and `env.TRUSTTAB_TOKEN` then never exists — the Worker runs,
+reports nothing, and says nothing about it. This has happened:
+
+```bash
+npx wrangler secret put TRUSTTAB_TOKEN     # correct: the NAME goes here
+# ✔ Enter a secret value: ›                # the token goes here, at the prompt
+```
+
+```bash
+npx wrangler secret put 3005bcfa-….abc123  # wrong: creates a secret named after the token
+```
+
+Confirm with `npx wrangler secret list` — you should see `TRUSTTAB_TOKEN` and
+nothing that looks like a token.
+
+### If the dashboard says your collector has never connected
+
+Work outwards from the Worker, not from TrustTab:
+
+1. `npx wrangler secret list` — is there a secret called exactly
+   `TRUSTTAB_TOKEN`?
+2. Is the Worker on a route your traffic actually takes (`example.com/*`)?
+3. Is the deployed Worker the current file? Redeploy if unsure.
+4. Only then test the token against TrustTab directly:
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" \
+     -H "Authorization: Bearer YOUR_TOKEN" \
+     "https://trusttab-mu.vercel.app/api/enforcement/feed"
+   ```
+
+**That last check proves the server accepts the token. It says nothing about
+whether your Worker holds it.** A token can be perfectly valid and the Worker
+still have no `TRUSTTAB_TOKEN` at all — the curl passes, the collector stays
+silent, and the two facts look like a contradiction. The dashboard indicator is
+the only check that covers the Worker's own configuration, which is why it
+comes first.
 
 ## Observe-only enforcement (Cloudflare Worker only, off by default)
 

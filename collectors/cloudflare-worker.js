@@ -41,7 +41,11 @@
  * Setup:
  *   1. Dashboard → your site → Agent traffic → turn on collection, copy the token.
  *   2. npx wrangler deploy collectors/cloudflare-worker.js --name trusttab-collector
- *   3. npx wrangler secret put TRUSTTAB_TOKEN     (paste the token)
+ *   3. npx wrangler secret put TRUSTTAB_TOKEN
+ *      ...then paste the token at the "Enter a secret value" prompt. The
+ *      argument is the secret's NAME; passing the token there creates a secret
+ *      named after it, leaving env.TRUSTTAB_TOKEN undefined and this Worker
+ *      silently reporting nothing.
  *   4. Add a route for your zone, e.g. example.com/*, pointing at this Worker.
  *   5. Optional: set TRUSTTAB_FEED=1 to enable the observe-only evaluation above.
  *
