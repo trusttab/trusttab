@@ -1134,6 +1134,61 @@ rather than silently changing direction.
     unbuilt still earns credibility, because it states a limit rather than
     promising a capability.
 
+- **2026-09-19 — Two audience pages, and a diagnostic endpoint for agent
+  operators.** `/for-agents` and `/for-security`, both linked from the landing
+  page, both grounded only in shipped behaviour. Copy and the scope limits live
+  in `src/lib/landing/audiences.ts`; `audiences.test.ts` pins them.
+  - **`GET /api/agent-check` (new).** An agent operator sends a signed request
+    and gets back exactly what TrustTab saw: verified or not, the identity, the
+    components the signature actually covered, and a plain reason plus what to
+    check when it fails. Same code path as real traffic, so a pass here means a
+    pass there. No account, no record, nothing stored, and a failure is still a
+    200 — the check ran and has an answer. `verifyWebBotAuth` now also returns
+    the covered component list, which it already computed for declared intent.
+    The body is built by `agentCheckBody` so both branches are unit-tested: a
+    real success needs a signature over a published directory, which can't be
+    produced against localhost.
+  - **Three corrections to the brief, made before building** (all approved):
+    - **Wrong list.** The extension's native-AI-platform detection matches the
+      *page's own hostname* — it answers "am I browsing claude.ai". Listing an
+      agent operator there would assert their *website* is a native AI
+      application. The right list is `src/lib/agent-traffic/agents.ts`, which
+      matches the user agent of inbound requests; its own header comment warns
+      against exactly this conflation.
+    - **Listing is a downgrade for an agent that signs.** Web Bot Auth
+      verification is automatic, per request, no registration — Tier 1. The
+      list is Tier 2, "only ever an estimate". Offering a list entry as the
+      reward for signing correctly inverts the hierarchy. What listing actually
+      buys is coverage for the operator's *unsigned* traffic, and the page sells
+      it as that, below signing, with `AGENT_TIER_EXAMPLES` ordered worst to
+      best and a test pinning the order.
+    - **No registration flow exists, and a self-serve one has an impersonation
+      problem** — anyone could submit an entry claiming to be OpenAI, which is
+      the vector Addition 5 exists to catch. A verified directory proves control
+      of a domain, not entitlement to a name. So listing stays a human step with
+      a stated rule: an entry names the operator by the domain their key
+      directory is served from.
+  - **`/for-security`'s scope block sits above every feature**, not in a
+    footer, and states four things: this is inbound visibility; it is **not**
+    agent governance (naming Astrix, Entro and Oasis, so the boundary is
+    concrete rather than abstract); it observes and does not enforce
+    (enforcement is the unbuilt fifth stage); and it **isn't audit evidence**,
+    because two of three tiers are estimates and site declarations are
+    self-attested. Tests pin all four, forbid enforcement verbs anywhere except
+    the sentence denying them, and forbid SOC 2 / ISO 27001 / SSO / certified /
+    guarantee / SLA language on either page.
+  - **Citations: verified verbatim, and carrying a scope note.** CSA's 53% ("of
+    organizations have had AI agents exceed their intended permissions", April
+    2026, 445 respondents) is disclosed as conducted by the CSA but
+    **commissioned by Zenity, an AI security vendor** (owner decision), and
+    Gartner's 13% ("think they have the right AI agent governance in place",
+    from their April 2026 AI-agent-sprawl release). Both measure a *broader*
+    problem than this page covers — largely agents organisations deploy
+    themselves, which is the category the page disclaims — so
+    `CITATION_SCOPE_NOTE` says so on the page and a test requires it. Without
+    that note the statistics would smuggle the overclaim back in after the copy
+    had carefully excluded it.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1232,6 +1287,14 @@ publish.
   not a shipped one whose caveat is now wrong. Re-read it when the extension
   reaches the Chrome Web Store, when the collector clears the DPA gate, and if
   enforcement mode is ever built.
+- The two cited studies (CSA/Zenity 53%, Gartner 13%) are dated April 2026 and
+  will age. Re-check them when the pages are next revised, and drop rather than
+  update a figure that can't be re-verified at its source.
+- Listing an agent in `agents.ts` is a manual step with a stated naming rule,
+  but no process enforces it beyond review. If `/for-agents` brings real
+  volume, that review is the control preventing an entry that claims someone
+  else's name — the same impersonation problem AI Check's Addition 5 exists to
+  catch, arriving through a pull request instead of a web page.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

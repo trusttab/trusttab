@@ -96,6 +96,31 @@ export default function Home() {
         ))}
       </section>
 
+      <section className="grid gap-5 sm:grid-cols-2">
+        {[
+          {
+            href: "/for-agents",
+            audience: "Building an AI agent?",
+            body: "Publish a key directory and sites running TrustTab recognise your agent by name instead of leaving it unclassified. Check your signing setup with one request, no account needed.",
+          },
+          {
+            href: "/for-security",
+            audience: "Running a site agents reach?",
+            body: "See which agents arrive, what they requested and in what order, and whether it matched what they declared. Inbound visibility only — it doesn't govern the agents you deploy yourself.",
+          },
+        ].map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className="rounded-lg border border-zinc-200 bg-white p-5 hover:border-zinc-300 hover:bg-zinc-50"
+          >
+            <h2 className="font-medium">{card.audience}</h2>
+            <p className="mt-2 text-sm text-zinc-600">{card.body}</p>
+            <p className="mt-3 text-sm font-medium underline underline-offset-4">Read more →</p>
+          </Link>
+        ))}
+      </section>
+
       <section className="space-y-5">
         <h2 className="text-xl font-semibold">Getting verified takes three steps</h2>
         <div className="grid gap-5 sm:grid-cols-3">

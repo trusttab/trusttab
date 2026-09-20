@@ -41,6 +41,13 @@ export type WebBotAuthResult =
        * intermediary can append a header to someone else's signed request.
        */
       declaration: IntentDeclaration | null;
+      /**
+       * The components the signature actually covered, lowercased. Only these
+       * are tamper-evident, which is why the diagnostic endpoint reports them:
+       * an operator checking their own setup needs to see what they signed,
+       * not just that something verified.
+       */
+      components: string[];
     }
   | { ok: false; reason: "not-signed" | "no-agent" | "unverified" | "directory-unavailable" | "budget" };
 
@@ -155,16 +162,18 @@ export async function verifyWebBotAuth(request: Request, options: VerifyOptions 
     // Only a covered component is tamper-evident: altering or removing a
     // covered header breaks the signature, while an appended one leaves a
     // valid signature that simply never covered it.
-    const covered = verified.components.some((component) => {
-      const name = typeof component === "string" ? component : component.name;
-      return typeof name === "string" && name.toLowerCase() === INTENT_HEADER;
-    });
+    const components = verified.components
+      .map((component) => (typeof component === "string" ? component : component.name))
+      .filter((name): name is string => typeof name === "string")
+      .map((name) => name.toLowerCase());
+    const covered = components.includes(INTENT_HEADER);
     return {
       ok: true,
       identity: origin,
       keyid: verified.keyid,
       expires: verified.expires,
       declaration: covered ? parseIntentDeclaration(request.headers.get(INTENT_HEADER)) : null,
+      components,
     };
   } catch {
     return { ok: false, reason: "unverified" };
