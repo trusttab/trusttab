@@ -41,3 +41,30 @@ export function verifyManifestSignature(manifest: Manifest, jwks: { keys: Ed2551
     return false;
   }
 }
+
+/**
+ * Verifies a detached JWS produced by `signDetached` over `payload`. The same
+ * check a customer's edge performs on an enforcement feed, kept here so the
+ * server can prove the two agree.
+ */
+export function verifyDetached(payload: unknown, signature: string, jwks: { keys: Ed25519Jwk[] }): boolean {
+  return verifyDetachedOverString(canonicalize(payload), signature, jwks);
+}
+
+/** Verifies a detached JWS over exact bytes: what a customer's edge does with a feed. */
+export function verifyDetachedOverString(canonical: string, signature: string, jwks: { keys: Ed25519Jwk[] }): boolean {
+  try {
+    const [header, empty, sig] = signature.split(".");
+    if (!header || empty !== "" || !sig) return false;
+
+    const { alg, kid } = JSON.parse(Buffer.from(header, "base64url").toString("utf8"));
+    const jwk = jwks.keys.find((k) => k.kid === kid);
+    if (alg !== "EdDSA" || !jwk) return false;
+
+    const body = b64url(canonical);
+    const publicKey = createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: jwk.x }, format: "jwk" });
+    return cryptoVerify(null, Buffer.from(`${header}.${body}`), publicKey, Buffer.from(sig, "base64url"));
+  } catch {
+    return false;
+  }
+}

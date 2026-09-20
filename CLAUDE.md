@@ -1257,6 +1257,67 @@ rather than silently changing direction.
   - **Typeface:** tighter tracking and heavier weights on Geist (owner
     decision), no second font family.
 
+- **2026-09-20 — Enforcement, observe-only milestone (the "Protection" stage).**
+  A feasibility check first, as with C2PA and the RFC 9421 binding, then the
+  architecture it chose. **No blocking exists, and the landing page still lists
+  Protection as not built** — that only changes once observe-only has produced
+  reviewed evidence from real production traffic (owner decision, 2026-09-20).
+  - **Two architectures compared; the measurement decided it.** A round trip to
+    this deployment costs **~190–280ms warm and 3.2 seconds cold**, with
+    functions in a single region (`x-vercel-id: …::iad1::…`, no `vercel.json`).
+    Inline blocking with a strict timeout would therefore time out on exactly
+    the cold paths where a new agent first appears — enforcement absent when it
+    matters — while still charging every request up to the timeout, and putting
+    a serverless app and its Postgres in the synchronous path of someone else's
+    traffic. Rejected on the numbers.
+  - **What made the feed architecture viable was checked, not assumed:**
+    `web-bot-auth` and all three of its dependencies use **zero Node built-ins**
+    and go entirely through `crypto.subtle`, and Cloudflare Workers support
+    Ed25519 in WebCrypto. So a customer's edge can verify locally, and TrustTab
+    need never be in the request path at all.
+  - **"Fails open by architecture" was wrong as originally framed, and the fix
+    is structural.** A feed that caches the last known rules fails *static*, not
+    open: if TrustTab went dark, enforcement would continue unsupervised, and a
+    wrong rule would be stuck with no channel to correct it — strictly worse
+    than an inline check, which self-corrects on the next request. So every feed
+    carries `expires_at` (`FEED_TTL_SECONDS`, 180s), the edge drops an expired
+    feed rather than falling back to it, and there is deliberately no
+    last-known-good path. Staleness stops enforcement instead of outliving it.
+  - **The feed is signed over its exact bytes.** The body is the RFC 8785
+    canonical form and the detached JWS travels in `X-TrustTab-Signature`, so
+    the edge verifies what it received and needs no canonical-JSON
+    implementation of its own — a second JCS at the edge could drift from this
+    one, and the symptom would be feeds silently failing to verify.
+    `feed-signature.test.ts` runs the server's signature through the **Worker's
+    own verifier**: a valid feed verifies, one byte altered in transit does not,
+    another key's signature does not, and malformed or wrong-algorithm inputs
+    are refused rather than thrown on.
+  - **The parity test found a real bug before anything could act on it.** The
+    Worker duplicates the scope logic (it deploys as one standalone file), and
+    running the same fixtures through both implementations showed they
+    disagreed: given `purpose="not_a_purpose"` the server drops the unknown
+    purpose and finds nothing to compare, while the edge — having no taxonomy —
+    kept it and reported a mismatch. As blocking that would have refused an
+    agent for declaring a purpose we don't recognise. Fixed by carrying the
+    taxonomy in the feed; and a feed *without* one now drops every purpose
+    rather than trusting them unfiltered, because the error in that direction is
+    the one that becomes an over-block.
+  - **The edge's verdict is provisional, and the dashboard says so.** The Worker
+    does not verify the agent's RFC 9421 signature yet, so it reads a
+    declaration as presented; TrustTab re-checks it against the verified
+    signature. Both verdicts are stored (`site_agent_hits.edge_would_block`,
+    `edge_reason`, beside `scope_mismatch`) and the panel surfaces
+    **disagreements** — which is the actual product of this milestone: evidence
+    about whether an edge deciding alone would have been right. Edge-side
+    signature verification is a prerequisite for blocking and is not built.
+  - **Blocking is absent by test, not by intention.** `edge-parity.test.ts`
+    asserts the Worker constructs no `Response`, contains no blocking
+    vocabulary in its code, accepts only `mode: "observe"`, and never reaches
+    for a stale feed. `feed.test.ts` asserts a feed cannot express a block.
+  - **Cloudflare-only for v1** (owner decision): the Node/Next.js collector
+    does none of this and `TRUSTTAB_FEED` does nothing there. Documented in
+    collectors/README.md rather than held back for parity.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1370,6 +1431,22 @@ publish.
 - `globals.css` still carries the Day-1 note that styling is minimal and polish
   is deferred. That is now only true of the dashboard and auth pages, which this
   pass did not touch.
+- **Blocking must not be written until observe-only evidence is reviewed and
+  signed off** (owner decision, 2026-09-20, no exceptions). When it is, the
+  prerequisites are: edge-side RFC 9421 verification (the edge currently takes a
+  declaration at face value), a customer-controlled kill switch local to the
+  Worker, and a bound on rule scope so a feed can never refuse more than the
+  narrow case of a verified agent violating its own signed declaration.
+- The Worker duplicates scope logic from `src/lib/agent-traffic/intent.ts`
+  because it deploys as a single standalone file. `edge-parity.test.ts` runs
+  fixtures through both, but only the cases in that list: a behaviour neither
+  fixture covers can still drift. Bundling the Worker (wrangler does this at
+  deploy time) would remove the duplication and is the better long-term answer.
+- The observe-only feed contains no agent public keys yet, because the edge
+  doesn't verify signatures. When it does, the keys must come from the feed
+  rather than the edge fetching directories itself — an edge fetching
+  attacker-named hosts is the SSRF and amplification vector `safe-fetch` exists
+  to prevent on the server.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

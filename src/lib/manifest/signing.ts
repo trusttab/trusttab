@@ -71,6 +71,35 @@ export function getPublicJwks(): { keys: Ed25519Jwk[] } {
   return { keys: [getSigningKey().publicJwk] };
 }
 
+/**
+ * Signs any JSON document with the issuer key, as a detached compact JWS over
+ * its RFC 8785 canonical form — the same construction and the same key as a
+ * manifest, so one published JWKS verifies both.
+ *
+ * Used for the enforcement feed, where a customer's edge must be able to tell
+ * that the rules it is about to act on came from this issuer and were not
+ * altered in transit or by a cache.
+ */
+export function signDetached(payload: unknown): string {
+  return signDetachedOverString(canonicalize(payload));
+}
+
+/**
+ * Signs an exact string rather than a value to canonicalize.
+ *
+ * The enforcement feed is served as these exact bytes, so a customer's edge
+ * verifies what it actually received instead of re-deriving a canonical form.
+ * That keeps RFC 8785 out of the edge entirely: a second JCS implementation
+ * there could drift from this one, and the symptom would be feeds that fail to
+ * verify for reasons nobody can see.
+ */
+export function signDetachedOverString(canonical: string): string {
+  const { privateKey, publicJwk } = getSigningKey();
+  const header = b64url(JSON.stringify({ alg: "EdDSA", kid: publicJwk.kid }));
+  const body = b64url(canonical);
+  return `${header}..${b64url(cryptoSign(null, Buffer.from(`${header}.${body}`), privateKey))}`;
+}
+
 export function signManifest(unsigned: UnsignedManifest): Manifest {
   const { privateKey, publicJwk } = getSigningKey();
   const header = b64url(JSON.stringify({ alg: "EdDSA", kid: publicJwk.kid }));

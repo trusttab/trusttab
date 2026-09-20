@@ -36,7 +36,34 @@ export type CollectorEvent = {
   ip?: string | null;
   /** Only the headers classification needs: user-agent and the signature headers. */
   headers?: Record<string, string>;
+  /**
+   * What the collector's own edge concluded, when observe-only enforcement is
+   * on there. Recorded as reported and never acted on: it is evidence about
+   * whether an edge could be trusted to decide, not a decision.
+   */
+  edge_observation?: { would_block?: unknown; reason?: unknown; feed_issued_at?: unknown };
 };
+
+/** The reasons an edge may report. Anything else is dropped rather than stored. */
+const EDGE_REASONS = ["path-outside-scope", "purpose-not-declared"] as const;
+
+/**
+ * Normalizes what a collector reported about its own verdict. The collector
+ * runs on someone else's infrastructure, so this is untrusted input: only a
+ * boolean and a known reason survive.
+ */
+function edgeObservation(event: CollectorEvent): {
+  edgeWouldBlock: boolean | null;
+  edgeReason: (typeof EDGE_REASONS)[number] | null;
+} {
+  const observation = event.edge_observation;
+  if (!observation || typeof observation !== "object") return { edgeWouldBlock: null, edgeReason: null };
+  const reason = EDGE_REASONS.find((known) => known === observation.reason) ?? null;
+  return {
+    edgeWouldBlock: typeof observation.would_block === "boolean" ? observation.would_block : null,
+    edgeReason: reason,
+  };
+}
 
 export function issueCollectorToken(siteId: string): { token: string; hash: string } {
   const secret = randomBytes(24).toString("base64url");
@@ -143,6 +170,7 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[], o
       userAgent: headers.get("user-agent")?.slice(0, 500) ?? null,
       declaredIntent: declaration ? formatDeclaration(declaration).slice(0, 400) : null,
       scopeMismatch: mismatch?.reason ?? null,
+      ...edgeObservation(event),
     });
   }
 

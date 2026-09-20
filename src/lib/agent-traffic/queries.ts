@@ -250,3 +250,50 @@ export async function getAgentTimeline(siteId: string, identity: string, days: A
     .map((row) => ({ ...row, at: new Date(row.at), tier: (row.tier ?? "unclassified") as AgentTier }))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 }
+
+export type EnforcementObservations = {
+  /** Requests the edge said something about at all. */
+  observed: number;
+  /** Requests the edge would have refused, had blocking existed. */
+  edgeWouldBlock: number;
+  /** Requests TrustTab itself found outside a declared scope, checking the verified signature. */
+  serverMismatch: number;
+  /** Where the two disagreed, which is the finding this milestone exists to produce. */
+  disagreements: { path: string | null; at: Date; edge: string | null; server: string | null }[];
+};
+
+/**
+ * Evidence from observe-only enforcement: what a site's own edge concluded,
+ * next to what TrustTab concluded about the same requests.
+ *
+ * The edge does not verify the RFC 9421 signature, so it reads a declaration
+ * as presented; TrustTab checks it against the signature. Agreement is the
+ * expected case. A disagreement means an edge acting alone would have got that
+ * request wrong — which is exactly what has to be understood before an edge is
+ * trusted to refuse anything.
+ */
+export async function getEnforcementObservations(siteId: string, range: AgentTrafficRange): Promise<EnforcementObservations> {
+  const rows = await db
+    .select({
+      path: siteAgentHits.path,
+      at: siteAgentHits.createdAt,
+      edge: siteAgentHits.edgeReason,
+      edgeWouldBlock: siteAgentHits.edgeWouldBlock,
+      server: siteAgentHits.scopeMismatch,
+    })
+    .from(siteAgentHits)
+    .where(and(eq(siteAgentHits.siteId, siteId), gte(siteAgentHits.createdAt, since(range))))
+    .orderBy(desc(siteAgentHits.createdAt))
+    .limit(2000);
+
+  const observed = rows.filter((row) => row.edgeWouldBlock !== null);
+  return {
+    observed: observed.length,
+    edgeWouldBlock: observed.filter((row) => row.edgeWouldBlock === true).length,
+    serverMismatch: observed.filter((row) => row.server !== null).length,
+    disagreements: observed
+      .filter((row) => (row.edge ?? null) !== (row.server ?? null))
+      .slice(0, 20)
+      .map(({ path, at, edge, server }) => ({ path, at, edge, server })),
+  };
+}

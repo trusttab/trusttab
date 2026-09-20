@@ -114,3 +114,54 @@ curl -A "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)" https
 
 It should appear in the dashboard under *Likely automated (estimate)* within a
 few seconds.
+
+## Observe-only enforcement (Cloudflare Worker only, off by default)
+
+The Cloudflare Worker can additionally work out, at your own edge, whether each
+request fell outside what the agent declared — and report that conclusion so you
+can see what enforcement *would* have done.
+
+**It does not block anything, and no code here can.** Blocking is separate work
+that begins only after these observations have been reviewed against real
+traffic. The Worker returns your origin's response on every path, and
+`edge-parity.test.ts` asserts it never constructs a response of its own.
+
+Turn it on with one variable, after collection is already working:
+
+```bash
+npx wrangler deploy collectors/cloudflare-worker.js --name trusttab-collector
+# then, in the Worker's settings or wrangler.toml:
+TRUSTTAB_FEED = "1"
+```
+
+Your dashboard then shows, under Agent traffic, what your edge concluded next to
+what TrustTab concluded about the same requests.
+
+### How it can't take your site down
+
+- **No TrustTab call sits in your request path.** The Worker fetches a small
+  rule feed on its own schedule. Your visitors never wait on us. (This was the
+  deciding measurement: a round trip to TrustTab costs ~190–280ms warm and
+  **3.2 seconds cold**, from a single region. Nothing that slow belongs in
+  front of your site.)
+- **It fails open by expiry.** Every feed carries its own `expires_at`, a few
+  minutes out. If TrustTab is slow, broken or unreachable, the feed goes stale
+  and the Worker stops evaluating. There is deliberately no "last known rules"
+  fallback: that would keep acting on rules nobody could correct.
+- **The feed is signed.** The Worker checks a detached Ed25519 signature over
+  the exact bytes it received, against the keys at
+  `/.well-known/jwks.json`, and ignores a feed that doesn't verify.
+
+### What it can't do yet, stated plainly
+
+- **The Worker does not verify the agent's RFC 9421 signature.** It reads the
+  declaration as presented, so its conclusion is provisional: an agent could
+  present a declaration it never signed and the edge would take it at face
+  value. TrustTab re-checks the same request against the verified signature,
+  and the dashboard shows where the two disagree. Edge-side signature
+  verification is required before blocking can exist, and is not built.
+- **The Node/Next.js collector does not do any of this.** It still reports
+  traffic exactly as before, and setting `TRUSTTAB_FEED` does nothing there.
+  Observe-only enforcement is Cloudflare-only for now. If you run the Node
+  collector, you can watch agent traffic and declared-intent mismatches in the
+  dashboard as usual — you just won't get the edge's own second opinion.

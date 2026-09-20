@@ -326,6 +326,18 @@ export const siteAgentHits = pgTable(
     declaredIntent: text("declared_intent"),
     /** Why the observed request fell outside that declaration, when it did. */
     scopeMismatch: text("scope_mismatch").$type<"path-outside-scope" | "purpose-not-declared">(),
+    /**
+     * What the site's own edge concluded about this request, when observe-only
+     * enforcement is switched on there. Null when the edge said nothing —
+     * because the feature is off, or its feed had expired.
+     *
+     * Stored next to `scope_mismatch`, which is the server's own verdict on the
+     * same request, so the two can be compared. The edge does not verify the
+     * RFC 9421 signature, so where they differ the server is right and the
+     * difference is the thing worth looking at.
+     */
+    edgeWouldBlock: boolean("edge_would_block"),
+    edgeReason: text("edge_reason").$type<"path-outside-scope" | "purpose-not-declared">(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_agent_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
