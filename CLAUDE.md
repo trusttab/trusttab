@@ -1177,6 +1177,28 @@ rather than silently changing direction.
     self-attested. Tests pin all four, forbid enforcement verbs anywhere except
     the sentence denying them, and forbid SOC 2 / ISO 27001 / SSO / certified /
     guarantee / SLA language on either page.
+  - **Live-tested end to end in production (2026-09-19)**, the same way
+    declared intent was: a throwaway key directory was published at
+    `/.well-known/http-message-signatures-directory`, five real signed requests
+    were sent to the live `/api/agent-check`, and the directory was removed in
+    the next commit. The private key never left the machine that generated it
+    and was never committed. Results, straight from production:
+    - a genuinely signed request → `verified: true`, identity
+      `https://trusttab-mu.vercel.app`, `covered_components` `["@authority",
+      "signature-agent"]`;
+    - a signed request whose signature covered an `intent-declaration` →
+      the declaration reported, and the header listed among the covered
+      components;
+    - **a declaration appended after signing → signature still valid,
+      `declared_intent: null`, and the header absent from
+      `covered_components`** — the tamper-evidence rule holding over the wire
+      on this endpoint too, not just in tests;
+    - a signature altered in flight → `unverified`, with what to check;
+    - a `Signature-Agent` naming a host that publishes no directory →
+      `directory-unavailable`, with what to serve.
+
+    So a real directory fetch through `safe-fetch` and the full verification
+    path are proven against the deployment an operator would actually call.
   - **Citations: verified verbatim, and carrying a scope note.** CSA's 53% ("of
     organizations have had AI agents exceed their intended permissions", April
     2026, 445 respondents) is disclosed as conducted by the CSA but
