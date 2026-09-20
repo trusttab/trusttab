@@ -6,6 +6,7 @@ import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { manifestEndpoints, manifests, ownerAgents, siteAgentHits, sites } from "@/db/schema";
+import { rememberAgentKeys } from "@/lib/enforcement/agent-keys";
 import { anonymizeIp } from "@/lib/ip";
 
 import { classifyRequest } from "./classify";
@@ -41,11 +42,20 @@ export type CollectorEvent = {
    * on there. Recorded as reported and never acted on: it is evidence about
    * whether an edge could be trusted to decide, not a decision.
    */
-  edge_observation?: { would_block?: unknown; reason?: unknown; feed_issued_at?: unknown };
+  edge_observation?: {
+    would_block?: unknown;
+    reason?: unknown;
+    feed_issued_at?: unknown;
+    signature_verdict?: unknown;
+    signature_identity?: unknown;
+    covered_components?: unknown;
+  };
 };
 
 /** The reasons an edge may report. Anything else is dropped rather than stored. */
 const EDGE_REASONS = ["path-outside-scope", "purpose-not-declared"] as const;
+/** The verdicts an edge may report about a signature. Anything else is dropped. */
+const EDGE_SIGNATURE_VERDICTS = ["valid", "invalid", "no-key", "not-signed", "unavailable"] as const;
 
 /**
  * Normalizes what a collector reported about its own verdict. The collector
@@ -55,13 +65,15 @@ const EDGE_REASONS = ["path-outside-scope", "purpose-not-declared"] as const;
 function edgeObservation(event: CollectorEvent): {
   edgeWouldBlock: boolean | null;
   edgeReason: (typeof EDGE_REASONS)[number] | null;
+  edgeSignatureVerdict: (typeof EDGE_SIGNATURE_VERDICTS)[number] | null;
 } {
   const observation = event.edge_observation;
-  if (!observation || typeof observation !== "object") return { edgeWouldBlock: null, edgeReason: null };
-  const reason = EDGE_REASONS.find((known) => known === observation.reason) ?? null;
+  const empty = { edgeWouldBlock: null, edgeReason: null, edgeSignatureVerdict: null };
+  if (!observation || typeof observation !== "object") return empty;
   return {
     edgeWouldBlock: typeof observation.would_block === "boolean" ? observation.would_block : null,
-    edgeReason: reason,
+    edgeReason: EDGE_REASONS.find((known) => known === observation.reason) ?? null,
+    edgeSignatureVerdict: EDGE_SIGNATURE_VERDICTS.find((known) => known === observation.signature_verdict) ?? null,
   };
 }
 
@@ -166,7 +178,13 @@ export async function recordSiteHits(siteId: string, events: CollectorEvent[], o
     const request = new Request(url, { method: event.method === "POST" ? "POST" : "GET", headers });
 
     const ip = typeof event.ip === "string" ? event.ip : null;
-    let agent = await classifyRequest(request, ip, options);
+    // Keys fetched while verifying are kept, so the enforcement feed can carry
+    // them to the site's edge. Never blocks classification: an agent verifies
+    // whether or not we manage to store its key.
+    let agent = await classifyRequest(request, ip, {
+      ...options,
+      onKeysLoaded: options.onKeysLoaded ?? ((identity, keys) => void rememberAgentKeys(identity, keys).catch(() => {})),
+    });
 
     // The owner's own label fills in where TrustTab could only guess; a
     // verified signature (or TrustTab's own fetch) always outranks it.

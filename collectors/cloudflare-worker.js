@@ -142,6 +142,78 @@ async function currentFeed(env) {
 }
 
 /**
+ * Verifies the request's own RFC 9421 signature, here at the edge, against
+ * keys the feed supplied.
+ *
+ * The keys come from the feed and never from a directory fetch: `Signature-Agent`
+ * is attacker-controlled, so an edge that fetched the URL it names would be a
+ * request-forgery and amplification vector. TrustTab does that fetching
+ * server-side, through a fetcher built to refuse private addresses.
+ *
+ * Verification itself is `web-bot-auth` — the same library and the same
+ * Ed25519 WebCrypto path already proven server-side — loaded dynamically so a
+ * Worker deployed without bundling (pasted into the dashboard editor, say)
+ * degrades to reporting no local verdict instead of failing to start.
+ *
+ * This produces a verdict and nothing else. It is reported alongside
+ * TrustTab's own, and the request is untouched either way.
+ */
+let libraryPromise;
+async function loadWebBotAuth() {
+  // One attempt per isolate; a Worker without the bundle shouldn't retry forever.
+  libraryPromise ??= import("web-bot-auth").catch(() => null);
+  return libraryPromise;
+}
+
+export async function verifySignatureLocally(request, feed, library) {
+  if (!request.headers.get("signature") || !request.headers.get("signature-input")) return { verdict: "not-signed" };
+  const agent = request.headers.get("signature-agent");
+  if (!agent) return { verdict: "not-signed" };
+
+  let identity;
+  try {
+    const url = new URL(agent.trim().replace(/^"|"$/g, ""));
+    if (url.protocol !== "https:") return { verdict: "not-signed" };
+    identity = url.origin;
+  } catch {
+    return { verdict: "not-signed" };
+  }
+
+  const now = Date.now();
+  const entry = (feed.agents ?? []).find((a) => a.identity === identity);
+  // A key past the expiry the feed gave it is no key at all. "No key" is a
+  // separate verdict from "invalid" on purpose: it says the edge had nothing
+  // to check against, not that the signature was bad.
+  const keys = (entry?.keys ?? []).filter((key) => !key.expires_at || Date.parse(key.expires_at) > now);
+  if (keys.length === 0) return { verdict: "no-key", identity };
+
+  const lib = library ?? (await loadWebBotAuth());
+  if (!lib?.verify) return { verdict: "unavailable", identity };
+
+  try {
+    const verified = await lib.verify(request, {
+      resolver: async (candidate) => {
+        const jwk = keys.find((key) => key.kid === candidate.keyid) ?? null;
+        if (!jwk) throw new Error("unknown key");
+        const key = await crypto.subtle.importKey("jwk", { kty: "OKP", crv: "Ed25519", x: jwk.x }, { name: "Ed25519" }, false, ["verify"]);
+        return {
+          algorithm: "ed25519",
+          keyid: candidate.keyid,
+          verify: (data, signature) => crypto.subtle.verify({ name: "Ed25519" }, key, signature, data),
+        };
+      },
+    });
+    const components = (verified.components ?? [])
+      .map((component) => (typeof component === "string" ? component : component?.name))
+      .filter((name) => typeof name === "string")
+      .map((name) => name.toLowerCase());
+    return { verdict: "valid", identity, keyid: verified.keyid, components };
+  } catch {
+    return { verdict: "invalid", identity };
+  }
+}
+
+/**
  * Parses `purpose="booking"; scope="/schedule-tour"`.
  *
  * Kept deliberately simple and deliberately duplicated from
@@ -212,7 +284,19 @@ async function report(request, env) {
     const feed = await currentFeed(env);
     if (feed) {
       const reason = evaluate(request, feed);
-      observed = { would_block: reason !== null, reason, feed_issued_at: feed.issued_at };
+      // The edge's own signature verdict, reported alongside TrustTab's. The
+      // two are not checking the same bytes — TrustTab rebuilds the request
+      // from what this Worker forwards — so they can legitimately differ, and
+      // the dashboard names which kind of difference it is.
+      const signature = await verifySignatureLocally(request, feed);
+      observed = {
+        would_block: reason !== null,
+        reason,
+        feed_issued_at: feed.issued_at,
+        signature_verdict: signature.verdict,
+        signature_identity: signature.identity ?? null,
+        covered_components: signature.components ?? null,
+      };
     }
   }
 

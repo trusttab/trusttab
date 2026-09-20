@@ -135,6 +135,12 @@ export type VerifyOptions = {
    * so tests inject their own.
    */
   loadKeys?: (origin: string) => Promise<DirectoryKey[] | null | "budget">;
+  /**
+   * Called when a directory fetch succeeds, so the keys can be kept for the
+   * enforcement feed to distribute. Fire-and-forget: this module verifies
+   * signatures and must not depend on, or be slowed by, storage.
+   */
+  onKeysLoaded?: (origin: string, keys: DirectoryKey[]) => void;
 };
 
 export async function verifyWebBotAuth(request: Request, options: VerifyOptions = {}): Promise<WebBotAuthResult> {
@@ -156,6 +162,7 @@ export async function verifyWebBotAuth(request: Request, options: VerifyOptions 
   const keys = await (options.loadKeys ?? directoryKeys)(origin);
   if (keys === "budget") return { ok: false, reason: "budget" };
   if (!keys) return { ok: false, reason: "directory-unavailable" };
+  options.onKeysLoaded?.(origin, keys);
 
   try {
     const verified = await verify(request, { resolver: (candidate) => verifierFor(candidate, keys) });

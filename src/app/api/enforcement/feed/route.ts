@@ -1,4 +1,5 @@
 import { siteForCollectorToken, touchCollector } from "@/lib/agent-traffic/collector";
+import { feedAgentsForSite } from "@/lib/enforcement/agent-keys";
 import { FEED_SIGNATURE_HEADER, FEED_TTL_SECONDS, buildEnforcementFeed, type FeedEndpoint } from "@/lib/enforcement/feed";
 import { canonicalize } from "@/lib/manifest/canonical-json";
 import { getIssuer } from "@/lib/manifest/build";
@@ -57,11 +58,16 @@ export async function GET(request: Request) {
     purpose: endpoint.purpose,
   }));
 
+  // Public keys for the agents seen on this site, so the edge can verify
+  // signatures locally and never has to fetch an attacker-named directory.
+  const agents = await feedAgentsForSite(site.id);
+
   const unsigned = buildEnforcementFeed({
     issuer: issuer.url,
     domain: site.domain,
     verificationId: site.verificationId,
     endpoints,
+    agents,
   });
   // The body is the canonical form and the signature covers exactly these
   // bytes, so the edge verifies what it received rather than re-deriving it.

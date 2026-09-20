@@ -50,6 +50,7 @@ export const FEED_TTL_SECONDS = 180;
 export const MAX_FEED_ENDPOINTS = 100;
 
 export type FeedEndpoint = { path: string; purpose: Purpose };
+export type FeedAgent = { identity: string; keys: { kid: string; x: string; expires_at: string }[] };
 
 export type UnsignedEnforcementFeed = {
   version: typeof FEED_VERSION;
@@ -74,6 +75,17 @@ export type UnsignedEnforcementFeed = {
    */
   purposes: Purpose[];
   endpoints: FeedEndpoint[];
+  /**
+   * Public keys for agents seen on this site, so the edge can verify RFC 9421
+   * signatures locally.
+   *
+   * They are distributed here rather than fetched at the edge because
+   * `Signature-Agent` names the directory URL and is attacker-controlled: an
+   * edge fetching it would be a request-forgery and amplification vector.
+   * Each key carries its own expiry, so one rotated away stops being used
+   * without needing the feed to say so.
+   */
+  agents: FeedAgent[];
 };
 
 /**
@@ -89,6 +101,7 @@ export function buildEnforcementFeed(input: {
   domain: string;
   verificationId: string | null;
   endpoints: FeedEndpoint[];
+  agents?: FeedAgent[];
   now?: Date;
 }): UnsignedEnforcementFeed {
   const now = input.now ?? new Date();
@@ -100,6 +113,7 @@ export function buildEnforcementFeed(input: {
     issued_at: now.toISOString(),
     expires_at: new Date(now.getTime() + FEED_TTL_SECONDS * 1000).toISOString(),
     purposes: [...PURPOSES],
+    agents: input.agents ?? [],
     // Sorted so an unchanged site produces a byte-identical document apart from
     // its timestamps, which makes "did the rules actually change" answerable.
     endpoints: input.endpoints

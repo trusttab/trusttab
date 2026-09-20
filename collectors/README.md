@@ -203,14 +203,36 @@ what TrustTab concluded about the same requests.
   the exact bytes it received, against the keys at
   `/.well-known/jwks.json`, and ignores a feed that doesn't verify.
 
-### What it can't do yet, stated plainly
+### Edge-side signature verification
 
-- **The Worker does not verify the agent's RFC 9421 signature.** It reads the
-  declaration as presented, so its conclusion is provisional: an agent could
-  present a declaration it never signed and the edge would take it at face
-  value. TrustTab re-checks the same request against the verified signature,
-  and the dashboard shows where the two disagree. Edge-side signature
-  verification is required before blocking can exist, and is not built.
+The Worker verifies each request's RFC 9421 signature itself, against public
+keys the feed supplies. It never fetches a key directory: `Signature-Agent`
+names that URL and is attacker-controlled, so an edge fetching it would be a
+request-forgery and amplification vector. TrustTab does that fetching, through
+a fetcher built to refuse private addresses, and distributes the keys.
+
+**Deploy from a repo checkout.** Verification uses the `web-bot-auth` library,
+which wrangler bundles at deploy time:
+
+```bash
+git clone https://github.com/trusttab/trusttab && cd trusttab && npm install
+npx wrangler deploy collectors/cloudflare-worker.js --name trusttab-collector
+```
+
+Pasting the file into the Cloudflare dashboard editor skips that bundling. The
+Worker still runs and still reports traffic — it reports `unavailable` for the
+signature verdict instead of failing to start — but you get no local
+verification. The library is loaded dynamically inside a `catch` specifically
+so this degrades rather than breaking.
+
+**Your edge and TrustTab will sometimes disagree, and that is expected.** They
+don't examine the same bytes: your edge sees the request as it arrived, while
+TrustTab rebuilds one from the six headers this Worker forwards. A signature
+covering a header that isn't forwarded verifies at your edge and fails at
+TrustTab — the signature is fine, and the difference measures what the
+collector carries. The dashboard names which kind of difference occurred
+rather than declaring either side correct, and flags only the one combination
+that has no routine explanation.
 - **The Node/Next.js collector does not do any of this.** It still reports
   traffic exactly as before, and setting `TRUSTTAB_FEED` does nothing there.
   Observe-only enforcement is Cloudflare-only for now. If you run the Node

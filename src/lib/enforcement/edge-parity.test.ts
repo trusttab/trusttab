@@ -53,6 +53,48 @@ describe("the Worker cannot block", () => {
   test("it verifies the feed signature before using it", () => {
     assert.match(WORKER, /if \(!\(await verifyFeed\(/, "an unverified feed is never parsed into rules");
   });
+
+  /**
+   * Step 3 gave the Worker the ability to verify signatures locally, which is
+   * precisely the capability blocking would need. These assert that the new
+   * capability stays on the reporting side of the line.
+   */
+  test("the request handler does no verification and reads no verdict", () => {
+    const handler = WORKER.slice(WORKER.indexOf("async fetch(request, env, ctx)"), WORKER.indexOf("export default worker"));
+    for (const forbidden of ["verifySignatureLocally", "currentFeed", "evaluate(", "signature_verdict", "would_block"]) {
+      assert.ok(!handler.includes(forbidden), `the fetch handler must not reference ${forbidden}`);
+    }
+    // All it may do is fetch the origin and hand the request to the reporter.
+    assert.match(handler, /const response = await fetch\(request\);/);
+    assert.match(handler, /ctx\.waitUntil\(report\(request, env\)/, "reporting happens after the response, off the request path");
+  });
+
+  test("the local signature verdict only ever reaches the report payload", () => {
+    // Every use of the verdict must be inside report(); nothing may branch on it.
+    const uses = [...WORKER.matchAll(/verifySignatureLocally\(/g)].length;
+    assert.equal(uses, 2, "one definition, one call — no second call site to branch on");
+    assert.doesNotMatch(WORKER, /if\s*\(\s*signature\.verdict/, "nothing branches on the verdict");
+    assert.doesNotMatch(WORKER, /verdict\s*===\s*"invalid"\s*\)\s*(return|throw)/, "the verdict never short-circuits anything");
+  });
+
+  test("the edge never fetches a key directory itself", () => {
+    // Signature-Agent is attacker-controlled; fetching the URL it names would
+    // be a request-forgery and amplification vector. Keys come from the feed.
+    assert.doesNotMatch(WORKER, /http-message-signatures-directory/, "no directory path is referenced");
+    // Every fetch must target either the origin or TrustTab — never a URL
+    // derived from anything the visitor sent.
+    // `await fetch(` only: the handler's own `async fetch(request, env, ctx)`
+    // declaration is the Worker's entry point, not an outbound request.
+    const callSites = WORKER.split("\n").filter((line) => /await fetch\(/.test(line));
+    assert.ok(callSites.length >= 3, "the known fetches are still there");
+    for (const line of callSites) {
+      assert.match(
+        line,
+        /fetch\(request\)|fetch\(`\$\{baseUrl\(env\)\}/,
+        `the Worker may only fetch the origin or TrustTab: ${line.trim()}`,
+      );
+    }
+  });
 });
 
 describe("edge and server agree on what falls outside a declaration", () => {

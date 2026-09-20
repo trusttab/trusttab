@@ -1367,6 +1367,55 @@ rather than silently changing direction.
     covers the whole path. collectors/README.md now leads with it and says
     plainly what the curl does and doesn't establish.
 
+- **2026-09-20 — Edge-side signature verification (step 3, observe-only).** The
+  Worker now verifies each request's RFC 9421 signature itself and logs that
+  verdict beside TrustTab's. **Nothing about any request changed**, and
+  Protection stays listed as not built.
+  - **Finding that forced a copy change, and the most important one in this
+    effort:** the panel said *"where they differ, TrustTab is right."* That was
+    true while the edge didn't verify. It becomes **actively false** here,
+    because the two don't check the same bytes — the edge sees the real inbound
+    request, while `recordSiteHits` rebuilds one from the six forwarded headers.
+    A signature covering anything unforwarded (`date`, `content-digest`, a
+    custom header) is genuinely valid, verifies at the edge, and cannot verify
+    here. For signature verification the edge is the better-positioned side.
+    So `compareVerdicts` **names the disagreement class and never picks a
+    winner**, and a test forbids winner-declaring language outright.
+  - **Five classes, one of them worth attention.** `unforwardable-component`
+    (edge valid / server invalid — routine, measures what the collector
+    carries), `cache-skew` (the server's 6-hour directory cache against the
+    3-minute feed, in either direction — routine), `feed-missing-key` (the edge
+    had nothing to check against, which is not a judgment on the signature),
+    `edge-rejected-server-accepted` (**no routine explanation — flagged**), and
+    `unclassified`. Flagging all disagreement equally would bury the one that
+    matters.
+  - **Measured, not assumed: a Web Bot Auth signature covers `("@authority"
+    "signature-agent")` and nothing else.** Not the path, not the method. A
+    signed request replayed to a different path on the same host still verifies,
+    on both sides. Harmless while this only logs — but a scope mismatch
+    attributes a *path* to a verified identity that the signature never bound,
+    so if that ever gated a block, replaying a captured signature to an
+    out-of-scope path would be a way to get someone else's agent refused.
+    **Requiring `@path` among the covered components is therefore a
+    prerequisite for step 5**, pinned by a test that fails if the library
+    starts covering it.
+  - **Keys are distributed, never fetched at the edge.** New `agent_keys` table,
+    written from the existing SSRF-safe server-side fetch via an
+    `onKeysLoaded` hook, published per site for the identities seen there.
+    An edge fetching the URL in `Signature-Agent` would reintroduce exactly the
+    request-forgery vector `safe-fetch` exists to prevent; a test asserts the
+    Worker only ever fetches the origin or TrustTab.
+  - **Blocking stayed out, structurally.** New guards: the fetch handler
+    references none of the verification machinery, there is exactly one call
+    site for the verdict so nothing can branch on it, and no code
+    short-circuits on it. Plus the existing ones (no `Response` constructed, no
+    blocking vocabulary, `observe` mode only, expired feed dropped).
+  - **Deployment changed** (owner decision (a)+(c)): verification needs
+    `web-bot-auth` bundled, so the Worker must be deployed from a repo
+    checkout. The import is dynamic inside a `catch`, so a Worker pasted into
+    the dashboard editor reports `unavailable` and keeps collecting rather than
+    failing to start.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1504,6 +1553,18 @@ publish.
   were usable. A collector sending malformed events would look healthy. That is
   the right trade for the question it answers, but it is not a data-quality
   signal.
+- **A Web Bot Auth signature does not bind the request path.** It covers
+  `@authority` and `signature-agent` only, so a captured signed request can be
+  replayed to any path on that host within its expiry window and will verify.
+  Before step 5 (blocking), a scope mismatch must only be attributable when the
+  signature actually covered `@path` — otherwise blocking on a mismatch is a way
+  to get a third party's agent refused. Pinned by a test in
+  `signature-parity.test.ts`.
+- The `unforwardable-component` disagreement class will likely be the most
+  common one in production, and it measures TrustTab's collector rather than
+  anything about the agent. If it dominates, the fix is forwarding the covered
+  component list or the signature base — which widens the privacy footprint, so
+  it is a decision and not an obvious improvement.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

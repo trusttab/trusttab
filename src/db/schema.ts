@@ -24,6 +24,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -347,6 +348,16 @@ export const siteAgentHits = pgTable(
      */
     edgeWouldBlock: boolean("edge_would_block"),
     edgeReason: text("edge_reason").$type<"path-outside-scope" | "purpose-not-declared">(),
+    /**
+     * What the site's edge concluded about the request's own RFC 9421
+     * signature, verified locally against feed-supplied keys.
+     *
+     * Kept beside the server's verdict rather than replacing it. The two check
+     * different bytes — the edge sees the real request, the server rebuilds one
+     * from the forwarded fields — so a difference is a fact about which, not
+     * about who is correct.
+     */
+    edgeSignatureVerdict: text("edge_signature_verdict").$type<"valid" | "invalid" | "no-key" | "not-signed" | "unavailable">(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("site_agent_hits_site_created_at_idx").on(t.siteId, t.createdAt)],
@@ -359,6 +370,34 @@ export const siteAgentHits = pgTable(
  * dashboard: a self-configured label, not a verified claim, and it is never
  * exposed on any public surface.
  */
+/**
+ * Public keys an agent operator publishes in its Web Bot Auth directory, kept
+ * so the enforcement feed can carry them to a site's edge.
+ *
+ * The edge must never fetch a directory itself: `Signature-Agent` is
+ * attacker-controlled, and an edge fetching the URL it names would be a
+ * request-forgery and amplification vector — the reason the server-side
+ * fetcher goes through safe-fetch. So keys are fetched here, once, and
+ * distributed.
+ *
+ * These are public keys. Nothing secret is stored.
+ */
+export const agentKeys = pgTable(
+  "agent_keys",
+  {
+    /** The directory's origin, e.g. https://chatgpt.com. */
+    identity: text("identity").notNull(),
+    /** The key id a signature names. */
+    kid: text("kid").notNull(),
+    /** The public JWK, as published. */
+    jwk: jsonb("jwk").$type<{ kty: string; crv: string; x: string; kid?: string }>().notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When this copy should stop being trusted, so a rotated-away key ages out. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.identity, t.kid] }), index("agent_keys_identity_idx").on(t.identity)],
+);
+
 export const ownerAgents = pgTable(
   "owner_agents",
   {

@@ -4,6 +4,7 @@ import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { manifestHits, siteAgentHits } from "@/db/schema";
+import { compareVerdicts, type Comparison, type DisagreementClass, type Verdict } from "@/lib/enforcement/verdicts";
 
 import type { AgentTier } from "./classify";
 import type { TimelineRequest } from "./timeline";
@@ -251,6 +252,12 @@ export async function getAgentTimeline(siteId: string, identity: string, days: A
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
+export type SignatureComparison = {
+  path: string | null;
+  at: Date;
+  comparison: Comparison;
+};
+
 export type EnforcementObservations = {
   /** Requests the edge said something about at all. */
   observed: number;
@@ -258,8 +265,18 @@ export type EnforcementObservations = {
   edgeWouldBlock: number;
   /** Requests TrustTab itself found outside a declared scope, checking the verified signature. */
   serverMismatch: number;
-  /** Where the two disagreed, which is the finding this milestone exists to produce. */
+  /** Where the two disagreed about *scope*, which the earlier milestone produced. */
   disagreements: { path: string | null; at: Date; edge: string | null; server: string | null }[];
+  /** Requests where the edge verified the signature itself. */
+  signatureChecked: number;
+  /**
+   * Where the edge and TrustTab reached different conclusions about a
+   * signature, grouped by which kind of difference it was. Most classes have a
+   * routine explanation; the panel names the class rather than picking a side.
+   */
+  signatureClasses: { class: DisagreementClass; count: number; example: Comparison }[];
+  /** The examples worth a person's time, newest first. */
+  concerningSignatures: SignatureComparison[];
 };
 
 /**
@@ -280,6 +297,8 @@ export async function getEnforcementObservations(siteId: string, range: AgentTra
       edge: siteAgentHits.edgeReason,
       edgeWouldBlock: siteAgentHits.edgeWouldBlock,
       server: siteAgentHits.scopeMismatch,
+      edgeSignature: siteAgentHits.edgeSignatureVerdict,
+      tier: siteAgentHits.agentTier,
     })
     .from(siteAgentHits)
     .where(and(eq(siteAgentHits.siteId, siteId), gte(siteAgentHits.createdAt, since(range))))
@@ -287,7 +306,32 @@ export async function getEnforcementObservations(siteId: string, range: AgentTra
     .limit(2000);
 
   const observed = rows.filter((row) => row.edgeWouldBlock !== null);
+
+  // The server's own conclusion about the signature, as stored: a request
+  // classified "verified" is one whose signature TrustTab checked and accepted.
+  const serverSaid = (tier: string | null, edge: string | null): Verdict =>
+    tier === "verified" ? "valid" : edge === "not-signed" ? "not-signed" : "invalid";
+
+  const compared = observed
+    .filter((row) => row.edgeSignature !== null && row.edgeSignature !== "unavailable")
+    .map((row) => ({
+      path: row.path,
+      at: row.at,
+      comparison: compareVerdicts(row.edgeSignature as Verdict, serverSaid(row.tier, row.edgeSignature)),
+    }));
+
+  const byClass = new Map<DisagreementClass, { class: DisagreementClass; count: number; example: Comparison }>();
+  for (const { comparison } of compared) {
+    if (comparison.class === "agree") continue;
+    const entry = byClass.get(comparison.class) ?? { class: comparison.class, count: 0, example: comparison };
+    entry.count++;
+    byClass.set(comparison.class, entry);
+  }
+
   return {
+    signatureChecked: compared.length,
+    signatureClasses: [...byClass.values()].sort((a, b) => b.count - a.count),
+    concerningSignatures: compared.filter((row) => row.comparison.concerning).slice(0, 20),
     observed: observed.length,
     edgeWouldBlock: observed.filter((row) => row.edgeWouldBlock === true).length,
     serverMismatch: observed.filter((row) => row.server !== null).length,
