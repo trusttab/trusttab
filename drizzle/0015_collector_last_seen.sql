@@ -1,0 +1,1 @@
+ALTER TABLE "sites" ADD COLUMN "collector_last_seen_at" timestamp with time zone;

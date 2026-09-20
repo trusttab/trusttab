@@ -1318,6 +1318,36 @@ rather than silently changing direction.
     does none of this and `TRUSTTAB_FEED` does nothing there. Documented in
     collectors/README.md rather than held back for parity.
 
+- **2026-09-20 — "Is the collector actually connected?", shown in the dashboard.**
+  Built immediately after a real failure it would have caught: leasetab.com had
+  collection switched on, a token in the dashboard and a deployed Worker, and
+  had recorded **zero** requests since the feature shipped. Nothing surfaced it.
+  Finding out took a query against the production database.
+  - **Why it hid.** Three deliberate decisions compounded. The collector
+    swallows its own errors (it must never disturb a customer's site), the
+    ingest endpoint answers 401 identically for a bad token, a disabled site and
+    an unknown one (so it can't be used to probe), and the dashboard reported
+    collection as "on" because the *toggle* was on. Each is right on its own;
+    together they made a silent failure invisible to the only person who could
+    fix it.
+  - **The fix tracks contact, not rows.** `sites.collector_last_seen_at` is
+    written on any authenticated collector request — ingest, and also a feed
+    fetch carrying no events, because a collector proving its token works is
+    exactly the missing signal. At most one write per site per minute, as a
+    conditional UPDATE, so high-volume ingest doesn't turn into write
+    amplification.
+  - **It separates two states that look identical in the data:** a collector
+    connected with nothing to report, and one that has never worked. Both
+    produce empty tables. `describeCollectorHealth` distinguishes off / never /
+    silent (>24h) / quiet / reporting, and only "never" and "silent" ask for
+    attention — a quiet site is not a problem and must not be reported as one.
+  - **The banner sits above the numbers and beside the fix**, directly under
+    "Your own pages" and immediately above the collection toggle and token
+    controls, so the diagnosis and the remedy are in one place.
+  - **Still unresolved at time of writing:** leasetab.com's token was rotated,
+    but production shows zero rows and no contact yet. That is now answerable
+    from the dashboard rather than the database, which was the point.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1447,6 +1477,14 @@ publish.
   rather than the edge fetching directories itself — an edge fetching
   attacker-named hosts is the SSRF and amplification vector `safe-fetch` exists
   to prevent on the server.
+- The collector still fails silently at the edge itself: the Worker catches and
+  discards its own errors, so a site owner learns about a bad token only from
+  the dashboard indicator, and only after they look. A collector that cannot
+  reach TrustTab at all has no way to say so.
+- `collector_last_seen_at` records that a token authenticated, not that events
+  were usable. A collector sending malformed events would look healthy. That is
+  the right trade for the question it answers, but it is not a data-quality
+  signal.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

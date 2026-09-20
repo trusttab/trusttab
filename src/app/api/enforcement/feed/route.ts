@@ -1,4 +1,4 @@
-import { siteForCollectorToken } from "@/lib/agent-traffic/collector";
+import { siteForCollectorToken, touchCollector } from "@/lib/agent-traffic/collector";
 import { FEED_SIGNATURE_HEADER, FEED_TTL_SECONDS, buildEnforcementFeed, type FeedEndpoint } from "@/lib/enforcement/feed";
 import { canonicalize } from "@/lib/manifest/canonical-json";
 import { getIssuer } from "@/lib/manifest/build";
@@ -41,6 +41,10 @@ export async function GET(request: Request) {
 
   const { allowed, retryAfter } = await consumeRateLimit(`enforcement-feed:${site.id}`, SITE_LIMIT.limit, SITE_LIMIT.windowSeconds);
   if (!allowed) return json(429, { error: "Too many feed requests." }, { "retry-after": String(retryAfter) });
+
+  // A feed fetch carries no events but proves the collector's token works,
+  // which is the signal that was missing when leasetab.com sat silent.
+  await touchCollector(site.id);
 
   const issuer = getIssuer();
   const latest = await getLatestManifest(site.id);

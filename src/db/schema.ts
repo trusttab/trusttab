@@ -146,6 +146,15 @@ export const sites = pgTable(
      */
     agentTrafficEnabledAt: timestamp("agent_traffic_enabled_at", { withTimezone: true }),
     /**
+     * Last time an authenticated request arrived from this site's collector.
+     *
+     * Tracked separately from the hits themselves because they answer different
+     * questions: a collector can be connected and have nothing to report, which
+     * is indistinguishable from one that has never worked if you only count
+     * rows. That ambiguity hid a broken collector on leasetab.com for weeks.
+     */
+    collectorLastSeenAt: timestamp("collector_last_seen_at", { withTimezone: true }),
+    /**
      * SHA-256 of the collector's token secret; the token itself is shown to
      * the owner once, at enable time, and never stored.
      */

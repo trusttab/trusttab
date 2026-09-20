@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { REGISTRY_SCOPE_NOTE, SITE_SCOPE_NOTE, TIER_LABELS, TIER_NOTES } from "@/lib/agent-traffic/display";
+import type { CollectorHealth } from "@/lib/agent-traffic/collector-health";
 import { AGENT_TRAFFIC_WINDOWS, windowLabel, type AgentGroup, type AgentTrafficSummary } from "@/lib/agent-traffic/queries";
 
 import { AgentTrafficCollection } from "./agent-traffic-collection";
@@ -91,17 +92,40 @@ function Breakdown({ summary }: { summary: AgentTrafficSummary }) {
   );
 }
 
+/**
+ * Whether the collector is reaching TrustTab at all, stated before any of the
+ * numbers below it.
+ *
+ * A collector that has never connected and one that is connected with nothing
+ * to say produce the same empty tables, which is how a broken collector went
+ * unnoticed on a live site for weeks. This says which it is.
+ */
+function CollectorStatus({ health }: { health: CollectorHealth }) {
+  if (health.state === "off") return null;
+  const tone = health.needsAttention
+    ? "border-amber-300 bg-amber-50 text-amber-900"
+    : "border-zinc-200 bg-zinc-50 text-zinc-700";
+  return (
+    <div className={`rounded-md border px-3 py-2 text-sm ${tone}`}>
+      <p className="font-medium">{health.title}</p>
+      <p className="mt-0.5 text-xs">{health.detail}</p>
+    </div>
+  );
+}
+
 export function AgentTraffic({
   siteId,
   summary,
   siteSummary,
   collectionEnabled,
+  health,
 }: {
   siteId: string;
   summary: AgentTrafficSummary;
   /** Present only when the owner has site-wide collection turned on. */
   siteSummary: AgentTrafficSummary | null;
   collectionEnabled: boolean;
+  health: CollectorHealth;
 }) {
   return (
     <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5">
@@ -131,10 +155,11 @@ export function AgentTraffic({
         <Breakdown summary={summary} />
       </div>
 
-      {siteSummary && (
+      {collectionEnabled && (
         <div className="space-y-2 border-t border-zinc-200 pt-4">
           <h3 className="text-sm font-medium">Your own pages</h3>
-          <Breakdown summary={siteSummary} />
+          <CollectorStatus health={health} />
+          {siteSummary && <Breakdown summary={siteSummary} />}
         </div>
       )}
 

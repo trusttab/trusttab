@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { manifestEndpoints, manifests, ownerAgents, siteAgentHits, sites } from "@/db/schema";
@@ -90,6 +90,30 @@ export async function siteForCollectorToken(token: unknown) {
   const actual = Buffer.from(hashSecret(secret), "utf8");
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
   return site;
+}
+
+/**
+ * Records that this site's collector reached TrustTab, authenticated.
+ *
+ * Written at most once a minute per site: ingest can be high volume, and the
+ * question this answers ("is it connected at all?") needs nothing finer. The
+ * condition lives in the statement so the common case is a no-op update rather
+ * than a read followed by a write.
+ *
+ * Called on any authenticated collector request, including a feed fetch that
+ * carries no events — a collector proving its token works is exactly the
+ * signal that was missing when leasetab.com sat silent for weeks.
+ */
+export async function touchCollector(siteId: string): Promise<void> {
+  await db
+    .update(sites)
+    .set({ collectorLastSeenAt: new Date() })
+    .where(
+      and(
+        eq(sites.id, siteId),
+        or(isNull(sites.collectorLastSeenAt), lt(sites.collectorLastSeenAt, sql`now() - interval '60 seconds'`)),
+      ),
+    );
 }
 
 /**

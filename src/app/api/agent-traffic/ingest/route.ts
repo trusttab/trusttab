@@ -1,4 +1,4 @@
-import { MAX_EVENTS_PER_REQUEST, recordSiteHits, siteForCollectorToken, type CollectorEvent } from "@/lib/agent-traffic/collector";
+import { MAX_EVENTS_PER_REQUEST, recordSiteHits, siteForCollectorToken, touchCollector, type CollectorEvent } from "@/lib/agent-traffic/collector";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const maxDuration = 30;
@@ -46,6 +46,11 @@ export async function POST(request: Request) {
       headers: { "content-type": "application/json; charset=utf-8", "retry-after": String(retryAfter), "cache-control": "no-store" },
     });
   }
+
+  // The token checked out, so the collector is reachable and configured —
+  // recorded even if the events turn out to be unusable, because "is it
+  // connected" and "did it have anything to say" are different questions.
+  await touchCollector(site.id);
 
   const events = Array.isArray(body.events) ? (body.events as CollectorEvent[]) : null;
   if (!events) return json(400, { error: "Expected an events array." });

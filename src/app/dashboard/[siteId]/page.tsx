@@ -23,6 +23,7 @@ import { requireUser } from "@/lib/auth";
 import { getAssistantChanges, getOrCreateDraft } from "@/lib/drafts";
 import { manifestToInput } from "@/lib/manifest/input";
 import { ownerAgentsFor } from "@/lib/agent-traffic/collector";
+import { describeCollectorHealth } from "@/lib/agent-traffic/collector-health";
 import { getAgentActivity, getAgentTimeline, getAgentTraffic, getAgentVolume, getEnforcementObservations, getSiteAgentTraffic, parseRange, windowLabel } from "@/lib/agent-traffic/queries";
 import { getLatestManifest, getLatestVerificationRun, getTraffic, isManifestExpired } from "@/lib/manifest/queries";
 import { verificationSnippet } from "@/lib/ownership";
@@ -78,6 +79,14 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
   // Whether there is an assistant column at all decides whether this page is
   // two-column: without a key there is nothing to put in the second one.
   const assistantEnabled = Boolean(process.env.ANTHROPIC_API_KEY) && Boolean(site.ownershipVerifiedAt) && Boolean(draft);
+
+  // Whether the collector is reaching TrustTab at all — answered before any of
+  // the numbers, because an empty table means two very different things.
+  const collectorHealth = describeCollectorHealth({
+    collectionEnabled: site.agentTrafficEnabledAt !== null,
+    lastSeenAt: site.collectorLastSeenAt,
+    hitsInWindow: siteAgentTraffic?.total ?? 0,
+  });
 
   // One plain line about who has been requesting the site, for the summary.
   const identified = siteAgentTraffic
@@ -227,6 +236,7 @@ export default async function SitePage(props: PageProps<"/dashboard/[siteId]">) 
                   summary={agentTraffic}
                   siteSummary={siteAgentTraffic ?? null}
                   collectionEnabled={site.agentTrafficEnabledAt !== null}
+                  health={collectorHealth}
                 />
                 {agentActivity && <AgentActivityPanel agents={agentActivity} windowText={windowLabel(agentDays)} />}
                 {agentVolume && (
