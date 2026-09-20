@@ -1211,6 +1211,50 @@ rather than silently changing direction.
     that note the statistics would smuggle the overclaim back in after the copy
     had carefully excluded it.
 
+- **2026-09-19 — Marketing visual pass (from an owner-supplied mockup).** The
+  deferred "Day 4" polish, applied to the landing page, `/for-agents` and
+  `/for-security`. **Styling only** — the reviewed copy, `stages.ts`,
+  `audiences.ts`, the coverage lines, the citation disclosures and every test
+  pinning them are unchanged.
+  - **The mockup's own headline was not adoptable.** "DETECTION OF AI.
+    PROTECTION FROM AI." presents Protection as a current capability, which is
+    the exact overclaim the five-stage page exists to prevent. Only its
+    typography was taken.
+  - **The shipped/unshipped distinction was the one thing a restyle could
+    quietly destroy, and the existing tests couldn't see it.** `stages.test.ts`
+    pins the data partition and separate rendering; a restyle could draw five
+    identical cards from two arrays and pass every assertion. So both
+    treatments now come from `stageTreatment()` in `stage-style.ts`, and
+    `stage-style.test.ts` asserts they stay materially different: only shipped
+    is a card, the unshipped one has no fill, no rounded card, no call to
+    action, a dashed edge, and text written for dark ground. The four shipped
+    stages are cards on the page's own surface; Protection sits in a dark panel,
+    so the reader registers "different kind of thing" before reading a word.
+  - **Mockup devices were mapped onto content that already existed**, never the
+    reverse: numbered cards to the three-step section, the terminal panel to the
+    real `curl` block, badge-state colouring to the existing agent-tier table,
+    the dark inset to the positioning paragraph and the two closing
+    disclaimers. The mockup's dashboard screenshot, assistant mock, extension
+    comparison and three-tier AI Check cards were **not** built — there is no
+    copy behind them, and a fabricated product screenshot is the same class of
+    overclaim as fabricated copy.
+  - **Copy was verified byte-identical by diffing rendered text** against the
+    deployed pre-restyle pages, not by eye. That caught three real regressions
+    in my own work: an invented eyebrow and standfirst, two straight apostrophes
+    silently curled by moving strings into props, and two table column headers
+    lost when the tier table became cards (reverted to a restyled table, which
+    keeps them). `/for-agents` and `/for-security` now diff to zero.
+    **One intended delta remains on the landing page:** the three steps render
+    their number as the card's "01" numeral instead of a "1. " text prefix. The
+    numeral is lifted out of the existing string rather than added beside it, so
+    no word changed and the step isn't numbered twice.
+  - **Width:** the three marketing pages opt into the existing
+    `data-shell="wide"` mechanism. The header nav had to follow, or the logo sat
+    inset from the content below it — one `body:has(...)` rule, since the header
+    is a sibling of `<main>`. The dashboard's conditional use is untouched.
+  - **Typeface:** tighter tracking and heavier weights on Geist (owner
+    decision), no second font family.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1317,6 +1361,13 @@ publish.
   volume, that review is the control preventing an entry that claims someone
   else's name — the same impersonation problem AI Check's Addition 5 exists to
   catch, arriving through a pull request instead of a web page.
+- The marketing pages' visual language lives in `src/components/marketing.tsx`
+  and `stage-style.ts`, but nothing stops a future page from hand-rolling its
+  own cards and drifting. The only part protected by a test is the
+  shipped/unshipped distinction; the rest is convention.
+- `globals.css` still carries the Day-1 note that styling is minimal and polish
+  is deferred. That is now only true of the dashboard and auth pages, which this
+  pass did not touch.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

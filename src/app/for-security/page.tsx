@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DarkPanel, Eyebrow, SectionHeading } from "@/components/marketing";
 import { CITATIONS, CITATION_SCOPE_NOTE, SECURITY_LIMITS, SECURITY_SCOPE } from "@/lib/landing/audiences";
 
 export const metadata: Metadata = {
@@ -26,13 +27,13 @@ const FEATURES = [
 
 export default function ForSecurity() {
   return (
-    <div className="space-y-14">
-      <section className="space-y-5 pt-6">
-        <p className="text-sm font-medium text-zinc-500">For security and platform teams</p>
-        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+    <div data-shell="wide" className="space-y-20 pb-8">
+      <section className="space-y-6 pt-10 sm:pt-16">
+        <Eyebrow>For security and platform teams</Eyebrow>
+        <h1 className="max-w-4xl text-[2.75rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl">
           See which agents are reaching your site, and what they said they came to do.
         </h1>
-        <p className="max-w-2xl text-lg text-zinc-600">
+        <p className="max-w-2xl text-lg leading-relaxed text-zinc-600">
           Agents increasingly act on their own once deployed, and routinely do more than whoever deployed them intended.
           If they&apos;re reaching your public site or API, what you have today is a web server log and a user agent
           string that anyone can set.
@@ -44,38 +45,38 @@ export default function ForSecurity() {
         agent traffic" is one imprecise sentence away from "agent governance",
         which is a different category this product doesn't touch.
       */}
-      <section className="space-y-4 rounded-lg border border-zinc-300 bg-white p-6">
-        <h2 className="text-xl font-semibold">What this covers, and what it doesn&apos;t</h2>
-        <dl className="space-y-4">
+      <section className="space-y-6 rounded-2xl border border-zinc-300 bg-white p-6 sm:p-10">
+        <SectionHeading title="What this covers, and what it doesn't" />
+        <dl className="grid gap-6 sm:grid-cols-2">
           {SECURITY_SCOPE.map((limit) => (
-            <div key={limit.claim}>
-              <dt className="font-medium">{limit.claim}</dt>
-              <dd className="mt-1 max-w-2xl text-sm text-zinc-600">{limit.body}</dd>
+            <div key={limit.claim} className="border-l-2 border-zinc-200 pl-4">
+              <dt className="text-sm font-semibold tracking-tight text-zinc-900">{limit.claim}</dt>
+              <dd className="mt-2 text-sm leading-relaxed text-zinc-600">{limit.body}</dd>
             </div>
           ))}
         </dl>
       </section>
 
-      <section className="space-y-5">
-        <h2 className="text-xl font-semibold">What you actually get</h2>
+      <section className="space-y-6">
+        <SectionHeading title="What you actually get" />
         <div className="space-y-4">
           {FEATURES.map((feature) => (
-            <article key={feature.title} className="rounded-lg border border-zinc-200 bg-white p-5">
-              <h3 className="font-medium">{feature.title}</h3>
-              <p className="mt-2 max-w-3xl text-sm text-zinc-600">{feature.body}</p>
+            <article key={feature.title} className="rounded-xl border border-zinc-200 bg-white p-6">
+              <h3 className="text-base font-semibold tracking-tight">{feature.title}</h3>
+              <p className="mt-2.5 max-w-3xl text-sm leading-relaxed text-zinc-600">{feature.body}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Why this is worth watching</h2>
+      <section className="space-y-6">
+        <SectionHeading title="Why this is worth watching" />
         <div className="grid gap-4 sm:grid-cols-2">
           {CITATIONS.map((citation) => (
-            <figure key={citation.figure} className="rounded-lg border border-zinc-200 bg-white p-5">
-              <p className="text-3xl font-semibold tabular-nums">{citation.figure}</p>
-              <p className="mt-1 text-sm text-zinc-700">{citation.finding}</p>
-              <figcaption className="mt-3 space-y-1 text-xs text-zinc-500">
+            <figure key={citation.figure} className="rounded-xl border border-zinc-200 bg-white p-6">
+              <p className="text-5xl font-semibold tracking-[-0.03em] tabular-nums">{citation.figure}</p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-700">{citation.finding}</p>
+              <figcaption className="mt-4 space-y-1.5 border-t border-zinc-100 pt-3 text-xs leading-relaxed text-zinc-500">
                 <a href={citation.url} className="underline underline-offset-2">
                   {citation.source}
                 </a>
@@ -84,17 +85,19 @@ export default function ForSecurity() {
             </figure>
           ))}
         </div>
-        <p className="max-w-3xl text-sm text-zinc-600">{CITATION_SCOPE_NOTE}</p>
+        <p className="max-w-3xl text-sm leading-relaxed text-zinc-600">{CITATION_SCOPE_NOTE}</p>
       </section>
 
-      <section className="max-w-3xl space-y-3 border-t border-zinc-200 pt-8">
-        <h2 className="text-lg font-semibold">The honest limits</h2>
-        <p className="text-zinc-600">{SECURITY_LIMITS}</p>
-        <p className="text-sm text-zinc-500">
-          Related: <Link href="/for-agents" className="underline underline-offset-4">for agent builders</Link>, and the{" "}
-          <Link href="/" className="underline underline-offset-4">five stages</Link> this fits into.
-        </p>
-      </section>
+      <DarkPanel>
+        <div className="max-w-3xl space-y-4">
+          <SectionHeading title="The honest limits" tone="dark" />
+          <p className="text-[15px] leading-relaxed text-zinc-300">{SECURITY_LIMITS}</p>
+          <p className="text-sm text-zinc-500">
+            Related: <Link href="/for-agents" className="underline underline-offset-4">for agent builders</Link>, and
+            the <Link href="/" className="underline underline-offset-4">five stages</Link> this fits into.
+          </p>
+        </div>
+      </DarkPanel>
     </div>
   );
 }

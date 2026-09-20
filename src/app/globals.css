@@ -22,3 +22,9 @@ body {
 main:has(> [data-shell="wide"]) {
   max-width: 80rem;
 }
+
+/* The header has to follow, or the logo and nav sit inset from the content
+   below them. It is a sibling of <main>, so the match is made from <body>. */
+body:has(main > [data-shell="wide"]) header nav {
+  max-width: 80rem;
+}
