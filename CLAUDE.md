@@ -1416,6 +1416,83 @@ rather than silently changing direction.
     the dashboard editor reports `unavailable` and keeps collecting rather than
     failing to start.
 
+- **2026-09-21 — AI Check Additions 6 and 7 built; Addition 8 declined.**
+  - **Addition 6, self-described AI capability** (`ai-self-description.ts`).
+    Reads only the metadata a site publishes about itself — `meta description`,
+    `og:description`, `og:title`, and schema.org `description` / `keywords` /
+    `applicationCategory` / `slogan` on Organization, WebApplication,
+    SoftwareApplication, Product and WebSite. A match quotes the site's own
+    sentence and names the field it came from; nothing is paraphrased. Stated as
+    fact, and **it does not feed the summary badge** — a company truthfully
+    describing its own AI feature is not a concern, and treating it as one would
+    be the "AI-made = suspicious" framing this project refuses.
+    - **"AI" is matched case-sensitively.** The bare two-letter token is an
+      ordinary word in Italian and French ("noi siamo **ai** vostri servizi"),
+      so `AI` counts and `ai` does not. Pinned by tests in both languages.
+    - **Negation reuses the sensitive-request check's approach**: "no AI", "an
+      alternative to AI chatbots", "real people, not AI", "AI-free" all produce
+      nothing. The term appearing is not the same as the claim being made.
+    - **Verified against the three real cases that motivated it.**
+      leasetab.com ("an AI-powered leasing OS") and vapi.ai ("deploy advanced
+      voice AI agents") both fire, from their real metadata, committed as
+      fixtures. **GoDaddy does not, and that is correct**: checked against the
+      live rendered DOM (a plain fetch gets no metadata at all — it is
+      bot-differentiated), its description, og:description and Corporation
+      description mention no AI whatsoever. "Airo, AI BUILDER" is visible page
+      copy. Catching it would mean scanning arbitrary prose, which the spec
+      forbids, so GoDaddy is committed as a **negative** fixture to keep that
+      line where it is.
+  - **Addition 7, tracking and fingerprinting scripts** (`tracking-signatures.ts`,
+    `tracking.ts`). Same host-matching pattern as the widget list, over exactly
+    the evidence the widget check already collects — no second injection, no new
+    page access. Informational, and **does not feed the badge**: these scripts
+    run on most commercial sites, so feeding them in would make nearly every
+    page "something to review" and empty the badge of meaning.
+    - **Google Tag Manager is reported as a tag manager, never as Google
+      Analytics.** GTM is a container that can load anything; its presence says
+      a container is installed and nothing about its contents. GA matches only
+      on its own hosts. This is the `static.zdassets.com` shared-host lesson
+      from 2a applied before it became a repeat bug, and a test pins it.
+    - Widget vendors that also sell analytics (HubSpot, Intercom) are left out
+      so one installation is never shown as two findings; a test asserts no host
+      appears in both lists.
+  - **Addition 8, known-malicious-script detection: considered and declined**,
+    the same call as Addition 3 and for the same reason — an unreliable version
+    is worse than none, and here the stakes are asymmetric. The feasibility
+    research, which the spec required first:
+    - **Google Safe Browsing is non-commercial only** ("not for sale or revenue
+      generating purposes"); commercial use means Web Risk, a paid GCP product —
+      exactly the paid infrastructure the spec excludes.
+    - **abuse.ch URLhaus now requires an Auth-Key on every feed**, and states
+      commercial or for-profit use "may require a paid subscription". A key in a
+      client-side extension ships to every user.
+    - **EasyList/EasyPrivacy target ads and tracking, not malware** (useful for
+      Addition 7's host signatures, not for this). Malware Patrol's free lists
+      are discontinued.
+    - **Block List Project** is cleanly licensed (MIT/Unlicense, no key) and was
+      the owner's preferred source, so it got the same diligence. It failed it:
+      - the malware list is **81 MB / 2,656,393 entries**, last modified
+        **2026-07-18** — 64 days stale at time of writing, on both the Pages
+        mirror and at repo HEAD, despite the project advertising daily builds;
+      - **its most recent commit removes a false positive, and the false
+        positive is `chat.z.ai`** — an AI chat platform, precisely the surface
+        this extension examines. Shipping that list before 18 July would have
+        told users a legitimate AI chat service loads malware;
+      - the phishing list (190,215 entries, 5.4 MB) was checked as a reshape and
+        is **worse: last modified 2026-07-06**, 77 days stale, with four
+        false-positive corrections in the fortnight before it froze — one of
+        them `www.tm.a.prd.aadg.trafficmanager.net`, **Microsoft enterprise
+        authentication infrastructure**;
+      - it is also the wrong shape for the question: a DNS-blocking list of
+        malware distribution and C2 domains barely overlaps with domains that
+        appear as `<script src>` on real sites, and it carries no threat
+        classification, so the display could never say "skimmer" or "miner" as
+        the spec wants, nor say why a domain is listed.
+    - The owner had already removed two of the objections by dropping auto-red
+      to yellow and choosing a keyless bundled list. What remained was the data
+      itself: months-stale, and with a documented history of accusing legitimate
+      infrastructure — including an AI chat platform — of hosting malware.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1565,6 +1642,16 @@ publish.
   anything about the agent. If it dominates, the fix is forwarding the covered
   component list or the signature base — which widens the privacy footprint, so
   it is a decision and not an obvious improvement.
+- The AI self-description term list and the tracking signature list go stale
+  like every other list here (widget signatures, spoofed brands, known
+  products, C2PA trust lists). New AI phrasing and new analytics vendors appear
+  constantly; silence from either is not evidence of absence, which both say in
+  the UI.
+- Addition 8 is declined, not deferred pending a better bundled list. If it is
+  revisited, the blocker is data quality and freshness rather than licensing:
+  any source used would need a maintained removal process and a freshness
+  guarantee, which in practice means a commercial feed and a server-side
+  component — a different, paid decision.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.

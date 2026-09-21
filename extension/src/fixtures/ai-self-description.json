@@ -1,0 +1,24 @@
+{
+  "_comment": "Real metadata captured live on 2026-09-21, the cases that motivated Addition 6. Metadata only, not page content, consistent with the hermes-agent fixture.",
+  "leasetab": {
+    "description": "Lease Tab for Property Management is an AI-powered leasing OS, seamlessly managing 4 core data types to streamline your property operations.",
+    "ogDescription": "Lease Tab for Property Management is an AI-powered leasing OS, seamlessly managing 4 core data types to streamline your property operations.",
+    "ogTitle": null,
+    "structuredData": []
+  },
+  "vapi": {
+    "description": "Build, test, and deploy advanced voice AI agents in minutes with Vapi. The platform for developers creating conversational voice AI.",
+    "ogDescription": "Build, test, and deploy advanced voice AI agents in minutes with Vapi. The platform for developers creating conversational voice AI.",
+    "ogTitle": null,
+    "structuredData": []
+  },
+  "_godaddy_comment": "GoDaddy's rendered DOM, captured live 2026-09-21. A negative fixture: its 'Airo, AI BUILDER' feature is visible page prose, not self-published metadata, so this check correctly does not fire. Scanning prose to catch it is the tone-judgment the spec forbids.",
+  "godaddy": {
+    "description": "Your brand starts with the perfect domain. Make it yours today and build a professional website that grows with you. Join 20M+ who trust GoDaddy.",
+    "ogDescription": "All the help and tools you need to grow online: Websites, Domains, Digital and Social Marketing - plus GoDaddy Guides with you every step of the way.",
+    "ogTitle": "Make Your Own Way | GoDaddy",
+    "structuredData": [
+      "GoDaddy provides end-to-end solutions for online growth, including domain registration, web hosting and security, online marketing tools, payment processing and"
+    ]
+  }
+}

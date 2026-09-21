@@ -58,6 +58,28 @@
         </p>
 
         <!--
+          Additions 6 and 7: both informational, both stated as fact, and
+          neither feeds the summary badge. A page describing its own AI feature,
+          or loading the analytics nearly every commercial site loads, is not a
+          concern — folding either into the badge would empty it of meaning.
+        -->
+        <div id="ai-self-card" class="ai-card" data-state="clear" hidden>
+          <p class="ai-kicker">AI Check · What this site says about itself</p>
+          <h1 id="ai-self-title"></h1>
+          <p id="ai-self-summary"></p>
+          <ul id="ai-self-quotes"></ul>
+          <p id="ai-self-caveat" class="privacy"></p>
+        </div>
+
+        <div id="tracking-card" class="ai-card" data-state="clear" hidden>
+          <p class="ai-kicker">AI Check · Tracking scripts</p>
+          <h1 id="tracking-title"></h1>
+          <p id="tracking-summary"></p>
+          <ul id="tracking-list"></ul>
+          <p id="tracking-caveat" class="privacy"></p>
+        </div>
+
+        <!--
           2b sends page text off the device, so it is a separate, explicit action
           and never runs just because the tab was opened.
         -->

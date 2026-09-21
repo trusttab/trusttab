@@ -24,6 +24,9 @@ import { requestTextEstimate } from "./text-estimate";
 import { extractMainText } from "./text-extract";
 import { WIDGET_SIGNATURES } from "./widget-signatures";
 import { collectPageEvidence, describeWidgetCheck, detectWidgets, selectorsFor, type WidgetCheckOutcome } from "./widgets";
+import { AI_SELF_DESCRIPTION_CAVEAT, collectPageMetadata, findAiSelfDescription, type AiSelfDescription } from "./ai-self-description";
+import { TRACKING_CAVEAT, TRACKING_CONTEXT } from "./tracking-signatures";
+import { describeTracking, detectTracking, type TrackingDetection } from "./tracking";
 
 /** TrustTab instance to query; set at build time (see extension/build.mjs). */
 declare const __TRUSTTAB_URL__: string;
@@ -99,11 +102,16 @@ function render(domain: string | null, outcome: LookupOutcome) {
  * here in the popup. No network requests: nothing about the page leaves the
  * browser.
  */
-async function checkWidgets(): Promise<WidgetCheckOutcome> {
-  const result = (evidence: Parameters<typeof detectWidgets>[0]): WidgetCheckOutcome => ({
-    kind: "result",
-    detections: detectWidgets(evidence, WIDGET_SIGNATURES),
-    providersChecked: WIDGET_SIGNATURES.length,
+async function checkWidgets(): Promise<{ outcome: WidgetCheckOutcome; tracking: TrackingDetection[] }> {
+  // Addition 7 reuses exactly the evidence the widget check already collects,
+  // so it costs no second injection and reads nothing new from the page.
+  const result = (evidence: Parameters<typeof detectWidgets>[0]) => ({
+    outcome: {
+      kind: "result" as const,
+      detections: detectWidgets(evidence, WIDGET_SIGNATURES),
+      providersChecked: WIDGET_SIGNATURES.length,
+    },
+    tracking: detectTracking(evidence),
   });
 
   if (typeof chrome === "undefined" || !chrome.scripting?.executeScript) {
@@ -117,22 +125,108 @@ async function checkWidgets(): Promise<WidgetCheckOutcome> {
     } catch {
       pageHost = "";
     }
-    return hosts === null ? { kind: "preview" } : result({ pageHost, hosts: hosts.split(","), matchedSelectors: [] });
+    return hosts === null
+      ? { outcome: { kind: "preview" }, tracking: [] }
+      : result({ pageHost, hosts: hosts.split(","), matchedSelectors: [] });
   }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return { kind: "unavailable" };
+  if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return { outcome: { kind: "unavailable" }, tracking: [] };
   try {
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: collectPageEvidence,
       args: [selectorsFor(WIDGET_SIGNATURES)],
     });
-    return injection?.result ? result(injection.result) : { kind: "unavailable" };
+    return injection?.result ? result(injection.result) : { outcome: { kind: "unavailable" }, tracking: [] };
   } catch {
     // Chrome refuses injection into some pages (Web Store, other extensions, error pages).
-    return { kind: "unavailable" };
+    return { outcome: { kind: "unavailable" }, tracking: [] };
   }
+}
+
+/**
+ * Addition 6: reads only the metadata the site published about itself. A
+ * separate injection because it reads different things from the page — never
+ * body text, which is the line the spec draws.
+ */
+async function checkAiSelfDescription(): Promise<AiSelfDescription[]> {
+  if (typeof chrome === "undefined" || !chrome.scripting?.executeScript) return [];
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined || !/^https?:/.test(tab.url ?? "")) return [];
+  try {
+    const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: collectPageMetadata });
+    return injection?.result ? findAiSelfDescription(injection.result) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Addition 6. The site's own words, quoted back with the field they came from.
+ * Stated as fact because it is the site's own published description — and kept
+ * out of the safety badge, because a page describing its own AI feature is not
+ * a concern.
+ */
+function renderAiSelfDescription(found: AiSelfDescription[]) {
+  const card = $("ai-self-card");
+  if (found.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $("ai-self-title").textContent = "This site describes its own AI capability";
+  $("ai-self-summary").textContent =
+    "Taken from what the site published about itself, quoted exactly. It says nothing about whether any text on this page was AI-written.";
+  $("ai-self-quotes").replaceChildren(
+    ...found.map((item) => {
+      const li = document.createElement("li");
+      const quote = document.createElement("q");
+      quote.textContent = item.quote;
+      const source = document.createElement("span");
+      source.className = "muted";
+      source.textContent = ` — found in: ${item.source}`;
+      li.append(quote, source);
+      return li;
+    }),
+  );
+  $("ai-self-caveat").textContent = AI_SELF_DESCRIPTION_CAVEAT;
+}
+
+/**
+ * Addition 7. Informational, and explicitly not a concern: these scripts run on
+ * most commercial sites, so feeding them into the badge would make nearly every
+ * page "something to review".
+ */
+function renderTracking(detections: TrackingDetection[]) {
+  const card = $("tracking-card");
+  const sentence = describeTracking(detections);
+  if (!sentence) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $("tracking-title").textContent = "Tracking scripts on this page";
+  $("tracking-summary").textContent = `${sentence} ${TRACKING_CONTEXT}`;
+  $("tracking-list").replaceChildren(
+    ...detections.map((detection) => {
+      const li = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = detection.name;
+      const evidence = document.createElement("span");
+      evidence.className = "muted";
+      evidence.textContent = ` — ${detection.evidence.join(", ")}`;
+      li.append(name, evidence);
+      if (detection.note) {
+        const note = document.createElement("p");
+        note.className = "muted";
+        note.textContent = detection.note;
+        li.append(note);
+      }
+      return li;
+    }),
+  );
+  $("tracking-caveat").textContent = TRACKING_CAVEAT;
 }
 
 function renderWidgetCheck(outcome: WidgetCheckOutcome) {
@@ -548,7 +642,11 @@ function setupTabs() {
       }
       if (tab.id === "tab-ai" && !widgetCheckStarted) {
         widgetCheckStarted = true;
-        void checkWidgets().then(renderWidgetCheck);
+        void checkWidgets().then(({ outcome, tracking }) => {
+          renderWidgetCheck(outcome);
+          renderTracking(tracking);
+        });
+        void checkAiSelfDescription().then(renderAiSelfDescription);
         void currentPageHost().then(async ({ host, tabId }) => renderSafetyBadge(await runSafetyChecks(host, tabId)));
       }
     });
