@@ -81,10 +81,49 @@ test("every signature is specific enough to name a product", () => {
   for (const signature of TRACKING_SIGNATURES) {
     assert.ok(!ids.has(signature.id), `duplicate id ${signature.id}`);
     ids.add(signature.id);
-    assert.ok(signature.hosts.length > 0, `${signature.id} has hosts`);
+    // Hosts or a path selector: a signature matched on neither can never fire,
+    // and one matched on a shared CDN host is the false positive this avoids.
+    assert.ok(
+      signature.hosts.length > 0 || (signature.selectors?.length ?? 0) > 0,
+      `${signature.id} must match on a host or a script path`,
+    );
     for (const host of signature.hosts) {
       assert.match(host, /^[a-z0-9.-]+\.[a-z]{2,}$/, `${signature.id}: ${host} is a bare host`);
       assert.ok(!["com", "net", "io", "googleapis.com", "cloudfront.net"].includes(host), `${signature.id}: ${host} is too generic`);
     }
   }
+});
+
+/**
+ * rrweb is an open-source recorder usually served from a generic CDN — found
+ * on leasetab.com at unpkg.com. Matching the host would flag every site
+ * loading any npm package, which is the static.zdassets.com false positive at
+ * a much larger scale, so it is matched on the script's own path.
+ */
+describe("CDN-delivered libraries are matched by path, never by shared host", () => {
+  const withSelector = (selectors: string[]): PageEvidence => ({ pageHost: "leasetab.com", hosts: ["unpkg.com"], matchedSelectors: selectors });
+
+  test("unpkg alone is never a detection", () => {
+    assert.deepEqual(detectTracking({ pageHost: "x.test", hosts: ["unpkg.com", "cdn.jsdelivr.net"], matchedSelectors: [] }), []);
+  });
+
+  test("rrweb loaded from unpkg is detected, by its path", () => {
+    const found = detectTracking(withSelector(['script[src*="/rrweb@"]']));
+    assert.equal(found.length, 1);
+    assert.equal(found[0].id, "rrweb");
+    assert.equal(found[0].kind, "session_recording");
+    assert.deepEqual(found[0].evidence, ["loads a script whose path names it"]);
+  });
+
+  test("the note says who receives the recording isn't visible", () => {
+    const found = detectTracking(withSelector(['script[src*="/rrweb."]']));
+    assert.match(found[0].note ?? "", /isn't visible from the page/i);
+  });
+
+  test("no tracking signature lists a shared CDN as a host", () => {
+    const shared = ["unpkg.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "jsdelivr.net", "esm.sh", "skypack.dev"];
+    for (const signature of TRACKING_SIGNATURES) {
+      for (const host of signature.hosts) assert.ok(!shared.includes(host), `${signature.id} lists shared CDN ${host}`);
+    }
+  });
 });

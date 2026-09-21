@@ -26,7 +26,7 @@ import { WIDGET_SIGNATURES } from "./widget-signatures";
 import { collectPageEvidence, describeWidgetCheck, detectWidgets, selectorsFor, type WidgetCheckOutcome } from "./widgets";
 import { AI_SELF_DESCRIPTION_CAVEAT, collectPageMetadata, findAiSelfDescription, type AiSelfDescription } from "./ai-self-description";
 import { TRACKING_CAVEAT, TRACKING_CONTEXT } from "./tracking-signatures";
-import { describeTracking, detectTracking, type TrackingDetection } from "./tracking";
+import { describeTracking, detectTracking, trackingSelectors, type TrackingDetection } from "./tracking";
 
 /** TrustTab instance to query; set at build time (see extension/build.mjs). */
 declare const __TRUSTTAB_URL__: string;
@@ -136,7 +136,7 @@ async function checkWidgets(): Promise<{ outcome: WidgetCheckOutcome; tracking: 
     const [injection] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: collectPageEvidence,
-      args: [selectorsFor(WIDGET_SIGNATURES)],
+      args: [[...selectorsFor(WIDGET_SIGNATURES), ...trackingSelectors()]],
     });
     return injection?.result ? result(injection.result) : { outcome: { kind: "unavailable" }, tracking: [] };
   } catch {

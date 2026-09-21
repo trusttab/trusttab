@@ -21,20 +21,29 @@ export type TrackingDetection = {
 
 const matchesHost = (host: string, known: string) => host === known || host.endsWith(`.${known}`);
 
+/** Every selector the tracking signatures use, to pass to collectPageEvidence. */
+export function trackingSelectors(signatures: TrackingSignature[] = TRACKING_SIGNATURES): string[] {
+  return [...new Set(signatures.flatMap((s) => s.selectors ?? []))];
+}
+
 export function detectTracking(evidence: PageEvidence, signatures: TrackingSignature[] = TRACKING_SIGNATURES): TrackingDetection[] {
   const hosts = evidence.hosts.map((h) => h.toLowerCase());
+  const selectors = new Set(evidence.matchedSelectors);
   const detections: TrackingDetection[] = [];
 
   for (const signature of signatures) {
-    const matched = signature.hosts.filter((known) => hosts.some((host) => matchesHost(host, known)));
-    if (matched.length === 0) continue;
+    const evidenceFound = [
+      ...signature.hosts.filter((known) => hosts.some((host) => matchesHost(host, known))).map((host) => `loads from ${host}`),
+      ...(signature.selectors ?? []).filter((selector) => selectors.has(selector)).map(() => "loads a script whose path names it"),
+    ];
+    if (evidenceFound.length === 0) continue;
     detections.push({
       id: signature.id,
       name: signature.name,
       vendor: signature.vendor,
       kind: signature.kind,
       note: signature.note,
-      evidence: matched.map((host) => `loads from ${host}`),
+      evidence: [...new Set(evidenceFound)],
     });
   }
   return detections;

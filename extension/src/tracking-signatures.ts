@@ -47,6 +47,12 @@ export type TrackingSignature = {
   kind: TrackingKind;
   /** Hosts the script loads from. A host matches itself and any subdomain. */
   hosts: string[];
+  /**
+   * CSS selectors for the script tag itself, for libraries delivered from a
+   * shared CDN where the host says nothing. Matched on the path, never the
+   * host: listing `unpkg.com` would flag every site loading any npm package.
+   */
+  selectors?: string[];
   /** Shown with the finding when the plain name would overstate what was found. */
   note?: string;
 };
@@ -79,6 +85,22 @@ export const TRACKING_SIGNATURES: TrackingSignature[] = [
   { id: "mouseflow", name: "Mouseflow", vendor: "Mouseflow", kind: "session_recording", hosts: ["cdn.mouseflow.com"] },
   { id: "smartlook", name: "Smartlook", vendor: "Smartlook", kind: "session_recording", hosts: ["web-sdk.smartlook.com"] },
 
+  /**
+   * An open-source recorder, not a vendor service, usually loaded from a
+   * generic CDN — found on leasetab.com at
+   * `unpkg.com/rrweb@2.0.0-alpha.20/dist/rrweb.umd.cjs`. Matched on the path
+   * for exactly that reason: the host is shared with all of npm.
+   */
+  {
+    id: "rrweb",
+    name: "rrweb session recorder",
+    vendor: "rrweb (open source)",
+    kind: "session_recording",
+    hosts: [],
+    selectors: ['script[src*="/rrweb@"]', 'script[src*="/rrweb."]', 'script[src*="/rrweb/"]'],
+    note: "An open-source recording library rather than a hosted service, so who receives the recording isn't visible from the page.",
+  },
+
   { id: "fingerprintjs", name: "FingerprintJS", vendor: "FingerprintJS", kind: "fingerprinting", hosts: ["fpjs.io", "fpnpmcdn.net", "api.fpjs.io"] },
   { id: "threatmetrix", name: "ThreatMetrix", vendor: "LexisNexis", kind: "fingerprinting", hosts: ["online-metrix.net"] },
 
@@ -92,7 +114,7 @@ export const TRACKING_SIGNATURES: TrackingSignature[] = [
 
 /** Shown alongside any result, so silence is never read as "no tracking here". */
 export const TRACKING_CAVEAT =
-  "This matches a fixed list of well-known scripts by the host they load from. Finding nothing doesn't mean a page isn't tracking you — only that nothing on this list was loaded.";
+  "This matches a fixed list of well-known scripts by the host they load from, or by the script's own path where a shared CDN makes the host meaningless. Finding nothing doesn't mean a page isn't tracking you — only that nothing on this list was loaded.";
 
 /** Shown whenever any tracking is reported, so the finding isn't read as a warning. */
 export const TRACKING_CONTEXT =

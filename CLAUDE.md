@@ -1456,6 +1456,14 @@ rather than silently changing direction.
     - Widget vendors that also sell analytics (HubSpot, Intercom) are left out
       so one installation is never shown as two findings; a test asserts no host
       appears in both lists.
+    - **CDN-delivered open-source recorders are matched by path, never by host.**
+      leasetab.com loads `unpkg.com/rrweb@2.0.0-alpha.20/dist/rrweb.umd.cjs` —
+      rrweb is session recording, but listing `unpkg.com` would flag every site
+      that loads any npm package from a CDN, which is the
+      `static.zdassets.com` false positive at a far larger scale. Signatures may
+      therefore carry script-path selectors as well as hosts, reusing the
+      selector machinery the widget list already had. A test asserts no tracking
+      signature lists a shared CDN as a host.
   - **Addition 8, known-malicious-script detection: considered and declined**,
     the same call as Addition 3 and for the same reason — an unreliable version
     is worse than none, and here the stakes are asymmetric. The feasibility
