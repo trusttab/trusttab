@@ -1540,6 +1540,85 @@ rather than silently changing direction.
     "Hold" was doing unfamiliar work and could be read as *possess* or as
     *endorse*, the latter implying a design existed and had been rejected.
 
+- **2026-09-21 — Workflow monitoring, Tier 1 heartbeat
+  (WORKFLOW_MONITORING_SPEC.md).** A separate product surface: not a manifest,
+  not agent traffic, not signed by anything. An owner adds one HTTP request
+  step to a workflow on any platform, it pings a per-workflow URL on each run,
+  and `/dashboard/workflows` says whether the pings are arriving. The spec
+  asked for a feasibility check on each tier first; both were done before any
+  code, and both changed the plan.
+  - **Tier 1 feasibility: the scheduled job the spec assumed is not
+    supportable here, so it isn't used.** Vercel's Hobby plan allows 100 cron
+    jobs but **only one run per day, with up to 59 minutes of jitter**;
+    sub-daily expressions are rejected at deployment, not at runtime. An
+    hourly "who went overdue" sweep would need Pro. So **status is computed on
+    read**, when someone opens the page — which needs no scheduler at all, and
+    is the same "piggyback on the request you already have" pattern as
+    rate-limit and traffic-log pruning. **Owner decision: status-only for v1,
+    no alerting, don't buy Pro for this yet.** Since the spec's minimum was
+    email on the flip to overdue, the absence is stated in the UI
+    (`WORKFLOW_NO_ALERTS`) rather than left to be discovered: a monitoring
+    product that quietly doesn't alert is worse than one that says it doesn't.
+  - **Three explicit states, and this module was written before any UI**
+    (`src/lib/workflows/health.ts`). The agent-traffic collector shipped as a
+    table of timestamps, and "never connected", "connected and quiet" and
+    "stopped working" rendered identically — a broken collector sat unnoticed
+    on a live site, and finding out took a query against production. So
+    `describeWorkflowHealth` returns `never-pinged | on-schedule | overdue`,
+    each with its own title and explanation, and a test block
+    (`the three states are distinct and never collapse`) asserts that
+    never-pinged is never reported as overdue and that the three titles differ.
+    **"Never pinged" is deliberately not folded into "overdue":** one means
+    the step was never added or the URL is wrong, the other means something
+    that was working has stopped.
+  - **Grace period:** cadence + 20%, floor of 5 minutes (`GRACE_FRACTION`,
+    `MIN_GRACE_SECONDS`). The floor matters more than the fraction at short
+    cadences — a 5-minute cadence with a 1-minute grace would flag on ordinary
+    scheduler drift.
+  - **Overdue is worded as a fact about pings, not about the workflow:**
+    "TrustTab can't tell whether the workflow stopped running or ran without
+    reaching us." The heartbeat cannot distinguish those, and saying so is the
+    same discipline as the unclassified traffic tier.
+  - **The cadence is self-declared and labelled as such** everywhere it
+    appears (`WORKFLOW_CADENCE_LIMIT`), the same honesty tier as
+    owner-registered agent labels. Cadences are intervals only — "every hour",
+    not "every day at 9am" — because a wall-clock schedule would need a
+    timezone per workflow and a different overdue calculation; a wall-clock
+    workflow is still measured, by the gap between its runs.
+  - **Ping tokens** are `<id>.<secret>` with only a SHA-256 of the secret
+    stored and the URL shown exactly once, copied from the collector token for
+    the same reason: anyone holding a ping URL can make a workflow look alive.
+    An unknown token and a wrong secret get the same 404, so the endpoint can't
+    enumerate workflow ids. GET and POST are both accepted, since platforms
+    differ in what their HTTP step sends. The endpoint records **nothing about
+    the caller** — no IP, no user agent — because it doesn't need to, and
+    answers before writing (`after()`), so a workflow never waits on TrustTab's
+    database. Limits: 25 workflows per account, 30-day ping retention pruned on
+    2% of writes.
+  - **Tier 2 (n8n) feasibility, done and then deferred.** n8n's public API is
+    real and usable — `X-N8N-API-KEY`, `GET /api/v1/executions`, and step-level
+    detail and error messages only under `includeData=true`. Two findings
+    changed the shape. (a) **A non-enterprise n8n API key has full account
+    access**, not scoped read: asking a customer for one means asking for the
+    keys to every credential and workflow they own, and n8n Cloud's API needs a
+    paid plan on top. (b) So polling was dropped in favour of **push**: n8n's
+    own error-trigger/HTTP node posts execution detail to TrustTab, which needs
+    no key at all. **Owner decision: push-based n8n is labelled at the same
+    evidentiary tier as the heartbeat, not "verified from n8n's execution log"
+    as the spec's dashboard section wording suggests** — a self-configured node
+    posting a payload is the site owner's own claim, exactly like an
+    owner-registered agent, and the fact that it came from n8n's software
+    doesn't make TrustTab a witness to the execution. Only a pull from n8n's
+    own system of record, authenticated as the owner, would earn the stronger
+    label. **Tier 2 is not started: it waits until Tier 1 is proven on a real
+    workflow** (owner decision).
+  - **Fixed a latent bug found while building this**, not part of the feature:
+    `consumeRateLimit`'s 1% prune branch called `after()`, which throws outside
+    a request scope. It had never fired in a test run until the integration
+    suite grew to six files; with a 1% chance per call, it would eventually
+    have thrown in production on a code path with no request context. It now
+    falls back to a direct prune, with a 400-iteration regression test.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon
@@ -1702,5 +1781,20 @@ publish.
 - Ownership transfer: if a verified domain changes hands, the new owner
   currently gets "already verified by another account". Needs a
   re-verification / takeover flow.
+- Workflow monitoring has **no alerting**: overdue is only visible to someone
+  who opens the page. That is a real gap for a monitoring product, and it is
+  deferred on hosting cost (Vercel Hobby can't run a sub-daily cron), not on
+  principle. Revisit if Pro is ever bought for another reason.
+- A workflow's declared cadence can't be changed after it's added — the only
+  route is delete and re-add, which issues a new ping URL and loses the ping
+  history. Fine for a first version, mildly annoying in practice.
+- Workflow monitoring is **dashboard-level, not per-site**: workflows hang off
+  the user, not off a claimed domain, because a workflow often has no website
+  at all. If workflows ever need to be shared with a team, that's the same
+  missing ownership-transfer story as domains.
+- Tier 2 (n8n push) is designed but not built; it waits on Tier 1 being proven
+  on a real workflow. If it is built, its rows must carry a tier label from the
+  start, so a pushed execution record is never read as something TrustTab
+  verified.
 
 @AGENTS.md

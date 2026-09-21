@@ -54,8 +54,18 @@ export async function consumeRateLimit(
 
   // Occasionally clear out expired buckets; no cron needed. Each row carries
   // its own expiry, so a day-long window is never pruned early.
+  //
+  // `after` needs a request scope and throws without one, so a caller outside a
+  // route handler — a script, a test — would fail on the 1% of calls that take
+  // this branch. Pruning is opportunistic and must never throw into whatever
+  // asked for a rate-limit decision, so it falls back to running detached.
   if (Math.random() < 0.01) {
-    after(() => db.execute(sql`DELETE FROM rate_limit_buckets WHERE expires_at < now()`));
+    const prune = () => db.execute(sql`DELETE FROM rate_limit_buckets WHERE expires_at < now()`);
+    try {
+      after(prune);
+    } catch {
+      void prune().catch(() => {});
+    }
   }
 
   return { allowed: row.count <= limit, retryAfter: Math.max(1, row.reset_in) };

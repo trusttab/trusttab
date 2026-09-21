@@ -18,14 +18,20 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Your sites</h1>
-        <Link
-          href="/dashboard/new"
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
-        >
-          Claim a domain
-        </Link>
+        <div className="flex items-center gap-3">
+          {/* Workflow monitoring is its own surface, not tied to a claimed domain. */}
+          <Link href="/dashboard/workflows" className="text-sm underline underline-offset-4 hover:text-zinc-600">
+            Workflow monitoring
+          </Link>
+          <Link
+            href="/dashboard/new"
+            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+          >
+            Claim a domain
+          </Link>
+        </div>
       </div>
 
       {mySites.length === 0 ? (

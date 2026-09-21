@@ -34,6 +34,18 @@ const request = (ip: string | null, body: unknown = {}) =>
   });
 
 describe("consumeRateLimit windows", () => {
+  /**
+   * The pruning branch fires on 1% of calls and used to call `after`, which
+   * throws without a request scope — so this suite rolled dice on every call
+   * and failed intermittently. Enough calls to make that near-certain if it
+   * ever regresses.
+   */
+  test("a rate-limit decision never throws outside a request scope", async () => {
+    for (let i = 0; i < 400; i++) {
+      await consumeRateLimit(`itest-scope-${i}`, 1000, 60);
+    }
+  });
+
   test("pruning never cuts a day-long window short", async () => {
     const key = `itest-day:${randomUUID()}`;
     assert.equal((await consumeRateLimit(key, 2, 86_400)).allowed, true);

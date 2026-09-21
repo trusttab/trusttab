@@ -460,3 +460,53 @@ export const manifestEndpoints = pgTable(
   },
   (t) => [index("manifest_endpoints_manifest_id_idx").on(t.manifestId)],
 );
+
+/**
+ * Workflow monitoring, Tier 1: a heartbeat per workflow.
+ *
+ * A separate product surface from manifests and agent traffic — a workflow is
+ * not tied to a domain, so these hang off the user rather than a site.
+ *
+ * The cadence is the owner's own statement and nothing verifies it; TrustTab
+ * knows only when a ping arrives. `lastPingAt` is denormalised onto the row so
+ * status is a read of one row rather than an aggregate, which is what lets the
+ * three states be computed on page load with no scheduled job.
+ */
+export const workflows = pgTable(
+  "workflows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** One of CADENCES in src/lib/workflows/health.ts. Declared, never verified. */
+    cadence: text("cadence").notNull(),
+    /** SHA-256 of the ping secret. The secret itself is shown once, like the collector token. */
+    pingTokenHash: text("ping_token_hash").notNull(),
+    lastPingAt: timestamp("last_ping_at", { withTimezone: true }),
+    /** Total pings ever received, so a busy workflow doesn't need a count query. */
+    pingCount: integer("ping_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("workflows_user_id_idx").on(t.userId), uniqueIndex("workflows_ping_token_hash_idx").on(t.pingTokenHash)],
+);
+
+/**
+ * Recent pings, for the per-workflow drill-down. Bounded by the same 30-day
+ * retention as every other log here, pruned on write so no cron is needed.
+ *
+ * Nothing about the caller is stored: no IP, no user agent, no body. A ping is
+ * the fact that it arrived and when.
+ */
+export const workflowPings = pgTable(
+  "workflow_pings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("workflow_pings_workflow_id_idx").on(t.workflowId, t.receivedAt)],
+);

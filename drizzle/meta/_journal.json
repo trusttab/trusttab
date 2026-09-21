@@ -120,6 +120,13 @@
       "when": 1789940733604,
       "tag": "0016_edge_signature_verdicts",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790019695786,
+      "tag": "0017_workflow_heartbeats",
+      "breakpoints": true
     }
   ]
 }
