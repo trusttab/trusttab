@@ -179,6 +179,16 @@ main {
 }
 
 /*
+ * Secondary text inside a finding: the source a quote came from, and the note
+ * qualifying what a detection means. Set apart from the finding itself so a
+ * caveat is never mistaken for part of the claim.
+ */
+.muted {
+  color: var(--muted);
+}
+
+
+/*
  * AI Check is visually separate from verification: its own violet accent and
  * no green/blue/yellow status colors, so a result here never reads as a
  * verification status.
@@ -236,6 +246,29 @@ main {
   margin-top: 2px;
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
   overflow-wrap: anywhere;
+}
+
+/*
+ * A note qualifying what a detection means, inside the finding it qualifies.
+ * Scoped to .ai-card because the rule it has to beat is `.ai-card p`, which has
+ * the same specificity and comes later — raising specificity here rather than
+ * relying on source order, which the next edit would silently break.
+ */
+.ai-card p.muted {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/*
+ * A caveat closing out a card, set apart from the findings above it. `.privacy`
+ * alone loses to `.ai-card p`, which is why this is scoped the same way — these
+ * are the first cards to place a caveat inside the card rather than after it.
+ */
+.ai-card p.privacy {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
 }
 
 /*

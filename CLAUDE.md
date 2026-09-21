@@ -1464,6 +1464,20 @@ rather than silently changing direction.
       therefore carry script-path selectors as well as hosts, reusing the
       selector machinery the widget list already had. A test asserts no tracking
       signature lists a shared CDN as a host.
+  - **The green badge now names the distinction it relies on.** Adding two
+    informational cards put findings *below* a badge reading "These checks
+    found nothing", which read as a contradiction until the reader worked out
+    that "these checks" meant the safety checks specifically. It now ends
+    "Anything shown below is information, not a concern." (owner decision,
+    2026-09-21: name the distinction rather than trust it to be inferred, since
+    that assumption has been wrong before). A test pins the clause on green and
+    forbids it on yellow and red, where there *are* concerns below.
+  - **Two CSS rules the new cards exposed.** `.muted` was referenced by the
+    render code but never defined, and these are the first cards to place a
+    caveat *inside* a card rather than after it — so both lost to `.ai-card p`,
+    which has equal or higher specificity and comes later in the file. Both are
+    now scoped as `.ai-card p.muted` and `.ai-card p.privacy`, with the reason
+    in a comment, rather than left to source order for the next edit to break.
   - **Addition 8, known-malicious-script detection: considered and declined**,
     the same call as Addition 3 and for the same reason — an unreliable version
     is worse than none, and here the stakes are asymmetric. The feasibility

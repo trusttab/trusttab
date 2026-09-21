@@ -39,7 +39,8 @@ export function summarizeSafety(findings: SafetyFinding[]): SafetySummary {
     return {
       tier: "green",
       title: "No concerns found in our checks",
-      summary: "These checks found nothing. That isn't a promise the page is safe; it's what these specific checks look for.",
+      summary:
+        "These checks found nothing. That isn't a promise the page is safe; it's what these specific checks look for. Anything shown below is information, not a concern.",
       findings,
     };
   }
