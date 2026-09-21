@@ -1501,6 +1501,31 @@ rather than silently changing direction.
       itself: months-stale, and with a documented history of accusing legitimate
       infrastructure — including an AI chat platform — of hosting malware.
 
+- **2026-09-21 — "Beyond the five stages" on the landing page.** The What's
+  next panel now names the fuller mission — AI voice calls, AI-generated
+  phishing, agent-workflow reliability — as **vision, explicitly not a
+  roadmap**: "None of this exists, and none of it is being worked on… there are
+  no dates and no commitments."
+  - **Kept out of `STAGES`, deliberately** (`src/lib/landing/vision.ts`). The
+    five stages are one pipeline; these are different surfaces, not further
+    steps along it. Folding them in would blur that narrative and break the
+    assertion that exactly one stage is unshipped. A test pins that Protection
+    is still the only unshipped stage and that no vision area is a stage.
+  - **Held to the same rule as Protection, plus one more.** `vision.test.ts`
+    applies the present-tense capability blocklist and additionally forbids
+    dates and commitment language (`will ship`, `coming`, `Q1`, `20xx`,
+    `planned`, `soon`) — a vision section is exactly where a roadmap promise
+    creeps in. Each area is also required to admit a limit in its own words.
+  - **The blocklist gap was not used as a licence** (owner instruction,
+    2026-09-21): the regex catches "protects" but not "protecting", so the
+    gerund is avoided in the copy rather than relied on. Passing a check by
+    finding a hole in it isn't the standard this page is held to; the test now
+    forbids the gerund too.
+  - One phrase was rewritten on a cold re-read at the owner's request: "an open
+    question, not a design we hold" → "an open question we haven't answered".
+    "Hold" was doing unfamiliar work and could be read as *possess* or as
+    *endorse*, the latter implying a design existed and had been rejected.
+
 ## Status at the end of the 5-day build (2026-09-14)
 
 Live at https://trusttab-mu.vercel.app (Vercel team `trust-tab`, Neon

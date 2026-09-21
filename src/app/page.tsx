@@ -3,6 +3,7 @@ import Link from "next/link";
 import { DarkPanel, SectionHeading, StepCard } from "@/components/marketing";
 import { stageTreatment } from "@/lib/landing/stage-style";
 import { NEXT_STAGES, SHIPPED_STAGES, type Stage } from "@/lib/landing/stages";
+import { VISION_AREAS, VISION_INTRO } from "@/lib/landing/vision";
 
 /**
  * The landing page. Its one structural rule survives the restyle: shipped and
@@ -102,6 +103,26 @@ export default function Home() {
               </div>
             );
           })}
+
+          {/*
+            Further out than the fifth stage, and separated from it: these are
+            different surfaces, not further steps in the same pipeline. Same
+            rule applies — nothing here claims TrustTab does any of it.
+          */}
+          <div className="space-y-5 border-t border-zinc-800 pt-8">
+            <div className="max-w-2xl space-y-3">
+              <h3 className="text-base font-semibold tracking-tight text-zinc-100">Beyond the five stages</h3>
+              <p className="text-sm leading-relaxed text-zinc-400">{VISION_INTRO}</p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-3">
+              {VISION_AREAS.map((area) => (
+                <div key={area.name} className="space-y-2">
+                  <h4 className="text-sm font-medium text-zinc-300">{area.name}</h4>
+                  <p className="text-sm leading-relaxed text-zinc-500">{area.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </DarkPanel>
 
